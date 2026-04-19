@@ -35,6 +35,9 @@ function normalizeTodo(entry: unknown): TodoItem | null {
         content: record.content,
         status: record.status
     };
+    if (typeof record.id === 'string' && record.id.length > 0) {
+        item.id = record.id;
+    }
     if (typeof record.activeForm === 'string') {
         item.activeForm = record.activeForm;
     }
@@ -133,5 +136,83 @@ export function getTodoProgressMetrics(sessionId: string): TodoProgressMetrics {
         return lastSnapshot;
     } catch {
         return { todos: [], timestamp: null };
+    }
+}
+
+export interface TodoEvent {
+    tool: string;
+    taskId: string | undefined;
+    input: {
+        subject?: string;
+        activeForm?: string;
+        status?: string;
+    };
+}
+
+export function applyTodoEvent(current: TodoItem[], event: TodoEvent): TodoItem[] {
+    if (event.tool === 'TaskCreate') {
+        const subject = event.input.subject;
+        if (typeof subject !== 'string' || subject.length === 0 || event.taskId === undefined) {
+            return current;
+        }
+        const next: TodoItem = {
+            id: event.taskId,
+            content: subject,
+            status: 'pending'
+        };
+        if (typeof event.input.activeForm === 'string') {
+            next.activeForm = event.input.activeForm;
+        }
+        return [...current, next];
+    }
+
+    if (event.tool === 'TaskUpdate') {
+        if (event.taskId === undefined) {
+            return current;
+        }
+        if (event.input.status === 'deleted') {
+            return current.filter(t => t.id !== event.taskId);
+        }
+        return current.map((t) => {
+            if (t.id !== event.taskId)
+                return t;
+            const patched: TodoItem = { ...t };
+            if (typeof event.input.subject === 'string' && event.input.subject.length > 0) {
+                patched.content = event.input.subject;
+            }
+            if (typeof event.input.activeForm === 'string') {
+                patched.activeForm = event.input.activeForm;
+            }
+            if (isTodoStatus(event.input.status)) {
+                patched.status = event.input.status;
+            }
+            return patched;
+        });
+    }
+
+    // TaskList / TaskGet / unknown → no state change
+    return current;
+}
+
+export function readLastTodoSnapshot(sessionId: string): TodoItem[] {
+    const filePath = getTodoProgressFilePath(sessionId);
+    if (!fs.existsSync(filePath)) {
+        return [];
+    }
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n').filter(line => line.trim().length > 0);
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i];
+            if (line === undefined)
+                continue;
+            const snapshot = parseSnapshot(line, sessionId);
+            if (snapshot !== null) {
+                return snapshot.todos;
+            }
+        }
+        return [];
+    } catch {
+        return [];
     }
 }

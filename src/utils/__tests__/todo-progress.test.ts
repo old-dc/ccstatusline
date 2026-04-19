@@ -10,7 +10,9 @@ import {
     vi
 } from 'vitest';
 
+import type { TodoItem } from '../../types/TodoProgressMetrics';
 import {
+    applyTodoEvent,
     getTodoProgressFilePath,
     getTodoProgressMetrics
 } from '../todo-progress';
@@ -242,5 +244,95 @@ describe('todo-progress', () => {
 
             expect(getTodoProgressMetrics('s-own').todos).toHaveLength(1);
         });
+    });
+});
+
+describe('applyTodoEvent', () => {
+    const empty: TodoItem[] = [];
+
+    it('TaskCreate appends a pending todo with the given id', () => {
+        const result = applyTodoEvent(empty, {
+            tool: 'TaskCreate',
+            taskId: '1',
+            input: { subject: 'Write tests', activeForm: 'Writing tests' }
+        });
+        expect(result).toEqual([
+            { id: '1', content: 'Write tests', activeForm: 'Writing tests', status: 'pending' }
+        ]);
+    });
+
+    it('TaskCreate ignores events with no subject', () => {
+        const result = applyTodoEvent(empty, {
+            tool: 'TaskCreate',
+            taskId: '1',
+            input: {}
+        });
+        expect(result).toEqual(empty);
+    });
+
+    it('TaskUpdate patches status on the matching id', () => {
+        const base: TodoItem[] = [
+            { id: '1', content: 'A', status: 'pending' },
+            { id: '2', content: 'B', status: 'pending' }
+        ];
+        const result = applyTodoEvent(base, {
+            tool: 'TaskUpdate',
+            taskId: '2',
+            input: { status: 'in_progress' }
+        });
+        expect(result[0]).toEqual({ id: '1', content: 'A', status: 'pending' });
+        expect(result[1]).toEqual({ id: '2', content: 'B', status: 'in_progress' });
+    });
+
+    it('TaskUpdate with status=deleted removes the todo', () => {
+        const base: TodoItem[] = [
+            { id: '1', content: 'A', status: 'pending' },
+            { id: '2', content: 'B', status: 'pending' }
+        ];
+        const result = applyTodoEvent(base, {
+            tool: 'TaskUpdate',
+            taskId: '1',
+            input: { status: 'deleted' }
+        });
+        expect(result).toEqual([
+            { id: '2', content: 'B', status: 'pending' }
+        ]);
+    });
+
+    it('TaskUpdate can rename subject/activeForm', () => {
+        const base: TodoItem[] = [
+            { id: '1', content: 'Old', status: 'pending' }
+        ];
+        const result = applyTodoEvent(base, {
+            tool: 'TaskUpdate',
+            taskId: '1',
+            input: { subject: 'New', activeForm: 'Newing' }
+        });
+        expect(result[0]).toEqual({
+            id: '1',
+            content: 'New',
+            activeForm: 'Newing',
+            status: 'pending'
+        });
+    });
+
+    it('TaskUpdate on unknown id is a no-op', () => {
+        const base: TodoItem[] = [{ id: '1', content: 'A', status: 'pending' }];
+        const result = applyTodoEvent(base, {
+            tool: 'TaskUpdate',
+            taskId: '99',
+            input: { status: 'completed' }
+        });
+        expect(result).toEqual(base);
+    });
+
+    it('TaskList is a no-op (read-only query)', () => {
+        const base: TodoItem[] = [{ id: '1', content: 'A', status: 'pending' }];
+        const result = applyTodoEvent(base, {
+            tool: 'TaskList',
+            taskId: undefined,
+            input: {}
+        });
+        expect(result).toEqual(base);
     });
 });
