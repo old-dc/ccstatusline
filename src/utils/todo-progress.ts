@@ -194,6 +194,26 @@ export function applyTodoEvent(current: TodoItem[], event: TodoEvent): TodoItem[
     return current;
 }
 
+export function extractTaskIdFromResponse(toolResponse: unknown): string | undefined {
+    if (typeof toolResponse !== 'object' || toolResponse === null) {
+        return undefined;
+    }
+    const resp = toolResponse as Record<string, unknown>;
+    // TaskUpdate: { taskId: "10", ... }
+    if (typeof resp.taskId === 'string' && resp.taskId.length > 0) {
+        return resp.taskId;
+    }
+    // TaskCreate: { task: { id: "11", subject: "..." } }
+    const task = resp.task;
+    if (typeof task === 'object' && task !== null) {
+        const inner = task as Record<string, unknown>;
+        if (typeof inner.id === 'string' && inner.id.length > 0) {
+            return inner.id;
+        }
+    }
+    return undefined;
+}
+
 export function readLastTodoSnapshot(sessionId: string): TodoItem[] {
     const filePath = getTodoProgressFilePath(sessionId);
     if (!fs.existsSync(filePath)) {

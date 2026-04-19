@@ -50,6 +50,7 @@ import {
 } from './utils/speed-window';
 import {
     applyTodoEvent,
+    extractTaskIdFromResponse,
     getTodoProgressFilePath,
     getTodoProgressMetrics,
     readLastTodoSnapshot
@@ -480,10 +481,14 @@ async function handleHook(): Promise<void> {
                     nextTodos.push(item);
                 }
             } else {
+                // TaskCreate puts the assigned id only in tool_response.task.id;
+                // TaskUpdate has taskId in tool_input (and tool_response.taskId).
+                const taskId = data.tool_input?.taskId
+                    ?? extractTaskIdFromResponse(data.tool_response);
                 const prev = readLastTodoSnapshot(sessionId);
                 nextTodos = applyTodoEvent(prev, {
                     tool: data.tool_name ?? '',
-                    taskId: data.tool_input?.taskId,
+                    taskId,
                     input: {
                         subject: data.tool_input?.subject,
                         activeForm: data.tool_input?.activeForm,

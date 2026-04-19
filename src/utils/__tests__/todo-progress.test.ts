@@ -13,6 +13,7 @@ import {
 import type { TodoItem } from '../../types/TodoProgressMetrics';
 import {
     applyTodoEvent,
+    extractTaskIdFromResponse,
     getTodoProgressFilePath,
     getTodoProgressMetrics
 } from '../todo-progress';
@@ -334,5 +335,27 @@ describe('applyTodoEvent', () => {
             input: {}
         });
         expect(result).toEqual(base);
+    });
+});
+
+describe('extractTaskIdFromResponse', () => {
+    it('pulls id from TaskCreate response shape', () => {
+        expect(extractTaskIdFromResponse({ task: { id: '11', subject: 'x' } })).toBe('11');
+    });
+
+    it('pulls taskId from TaskUpdate response shape', () => {
+        expect(extractTaskIdFromResponse({ success: true, taskId: '10' })).toBe('10');
+    });
+
+    it('returns undefined when neither shape matches', () => {
+        expect(extractTaskIdFromResponse({ foo: 'bar' })).toBeUndefined();
+        expect(extractTaskIdFromResponse(null)).toBeUndefined();
+        expect(extractTaskIdFromResponse(undefined)).toBeUndefined();
+        expect(extractTaskIdFromResponse('text')).toBeUndefined();
+    });
+
+    it('ignores non-string id values', () => {
+        expect(extractTaskIdFromResponse({ task: { id: 42 } })).toBeUndefined();
+        expect(extractTaskIdFromResponse({ taskId: 42 })).toBeUndefined();
     });
 });
