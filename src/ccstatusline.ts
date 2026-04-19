@@ -12,7 +12,11 @@ import type { AgentActivityMetrics } from './types/AgentActivityMetrics';
 import type { RenderContext } from './types/RenderContext';
 import type { StatusJSON } from './types/StatusJSON';
 import { StatusJSONSchema } from './types/StatusJSON';
-import type { TodoProgressMetrics } from './types/TodoProgressMetrics';
+import type {
+    TodoItem,
+    TodoProgressMetrics,
+    TodoStatus
+} from './types/TodoProgressMetrics';
 import {
     getAgentActivityFilePath,
     getAgentActivityMetrics
@@ -45,8 +49,10 @@ import {
     isWidgetSpeedWindowEnabled
 } from './utils/speed-window';
 import {
+    applyTodoEvent,
     getTodoProgressFilePath,
-    getTodoProgressMetrics
+    getTodoProgressMetrics,
+    readLastTodoSnapshot
 } from './utils/todo-progress';
 import {
     classifyTool,
@@ -54,7 +60,12 @@ import {
     getToolCountFilePath,
     getToolCountMetrics
 } from './utils/tool-count';
+import { isTodoTool } from './utils/tool-names';
 import { prefetchUsageDataIfNeeded } from './utils/usage-prefetch';
+
+function isTodoStatusString(value: unknown): value is TodoStatus {
+    return value === 'pending' || value === 'in_progress' || value === 'completed';
+}
 
 function hasSessionDurationInStatusJson(data: StatusJSON): boolean {
     const durationMs = data.cost?.total_duration_ms;
@@ -289,7 +300,12 @@ interface HookInput {
         pattern?: string;
         url?: string;
         command?: string;
+        subject?: string;
+        activeForm?: string;
+        taskId?: string;
+        status?: string;
     };
+    tool_response?: unknown;
     prompt?: string;
 }
 
@@ -432,32 +448,50 @@ async function handleHook(): Promise<void> {
             fs.appendFileSync(agentPath, entry + '\n');
         }
 
-        // Todo Progress — snapshot on TodoWrite
-        if (data.hook_event_name === 'PostToolUse'
-            && data.tool_name === 'TodoWrite'
-            && Array.isArray(data.tool_input?.todos)) {
-            const todos: { content: string; status: string; activeForm?: string }[] = [];
-            for (const raw of data.tool_input.todos) {
-                if (typeof raw !== 'object' || raw === null)
-                    continue;
-                const rec = raw as Record<string, unknown>;
-                if (typeof rec.content !== 'string' || typeof rec.status !== 'string')
-                    continue;
-                const entry: { content: string; status: string; activeForm?: string } = {
-                    content: rec.content,
-                    status: rec.status
-                };
-                if (typeof rec.activeForm === 'string') {
-                    entry.activeForm = rec.activeForm;
-                }
-                todos.push(entry);
-            }
+        // Todo Progress — write a full-snapshot jsonl line on any todo tool.
+        // Legacy TodoWrite ships the complete array in one call; new
+        // TaskCreate/TaskUpdate are incremental, so we read the last snapshot,
+        // apply the event via applyTodoEvent, and write the merged result.
+        // The reader (getTodoProgressMetrics) stays untouched.
+        if (data.hook_event_name === 'PostToolUse' && isTodoTool(data.tool_name)) {
             const todoPath = getTodoProgressFilePath(sessionId);
             fs.mkdirSync(path.dirname(todoPath), { recursive: true });
+
+            let nextTodos: TodoItem[];
+            if (data.tool_name === 'TodoWrite' && Array.isArray(data.tool_input?.todos)) {
+                nextTodos = [];
+                for (const raw of data.tool_input.todos) {
+                    if (typeof raw !== 'object' || raw === null)
+                        continue;
+                    const rec = raw as Record<string, unknown>;
+                    if (typeof rec.content !== 'string' || !isTodoStatusString(rec.status))
+                        continue;
+                    const item: TodoItem = {
+                        content: rec.content,
+                        status: rec.status
+                    };
+                    if (typeof rec.activeForm === 'string') {
+                        item.activeForm = rec.activeForm;
+                    }
+                    nextTodos.push(item);
+                }
+            } else {
+                const prev = readLastTodoSnapshot(sessionId);
+                nextTodos = applyTodoEvent(prev, {
+                    tool: data.tool_name ?? '',
+                    taskId: data.tool_input?.taskId,
+                    input: {
+                        subject: data.tool_input?.subject,
+                        activeForm: data.tool_input?.activeForm,
+                        status: data.tool_input?.status
+                    }
+                });
+            }
+
             const entry = JSON.stringify({
                 timestamp: new Date().toISOString(),
                 session_id: sessionId,
-                todos
+                todos: nextTodos
             });
             fs.appendFileSync(todoPath, entry + '\n');
         }

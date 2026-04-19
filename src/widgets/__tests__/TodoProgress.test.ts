@@ -116,8 +116,10 @@ describe('TodoProgressWidget', () => {
         expect(widget.supportsRawValue()).toBe(true);
     });
 
-    it('registers PostToolUse+TodoWrite and UserPromptSubmit (turn marker) hooks', () => {
+    it('registers hooks for the new task tools plus legacy TodoWrite', () => {
         expect(widget.getHooks()).toEqual([
+            { event: 'PostToolUse', matcher: 'TaskCreate' },
+            { event: 'PostToolUse', matcher: 'TaskUpdate' },
             { event: 'PostToolUse', matcher: 'TodoWrite' },
             { event: 'UserPromptSubmit' }
         ]);

@@ -76,7 +76,7 @@ export function formatTodoProgress(
 export class TodoProgressWidget implements Widget {
     getDefaultColor(): string { return 'yellow'; }
     getDescription(): string {
-        return 'Shows current in-progress todo and completion ratio from TodoWrite';
+        return 'Shows current in-progress todo and completion ratio from todo tools';
     }
 
     getDisplayName(): string { return 'Todo Progress'; }
@@ -86,6 +86,8 @@ export class TodoProgressWidget implements Widget {
 
     getHooks(): WidgetHookDef[] {
         return [
+            { event: 'PostToolUse', matcher: 'TaskCreate' },
+            { event: 'PostToolUse', matcher: 'TaskUpdate' },
             { event: 'PostToolUse', matcher: 'TodoWrite' },
             { event: 'UserPromptSubmit' }
         ];
