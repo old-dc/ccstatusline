@@ -17,6 +17,7 @@ import type {
 } from '../types/Widget';
 import type { WidgetHookDef } from '../utils/hooks';
 import { shouldInsertInput } from '../utils/input-guards';
+import { SUBAGENT_TOOLS } from '../utils/tool-names';
 
 import { makeModifierText } from './shared/editor-display';
 import {
@@ -151,9 +152,12 @@ export class AgentActivityWidget implements Widget {
     supportsColors(_item: WidgetItem): boolean { return true; }
 
     getHooks(): WidgetHookDef[] {
+        const subagentHooks: WidgetHookDef[] = SUBAGENT_TOOLS.flatMap(tool => [
+            { event: 'PreToolUse', matcher: tool } as WidgetHookDef,
+            { event: 'PostToolUse', matcher: tool } as WidgetHookDef
+        ]);
         return [
-            { event: 'PreToolUse', matcher: 'Agent' },
-            { event: 'PostToolUse', matcher: 'Agent' },
+            ...subagentHooks,
             { event: 'UserPromptSubmit' }
         ];
     }

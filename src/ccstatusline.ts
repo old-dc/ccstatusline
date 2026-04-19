@@ -60,7 +60,11 @@ import {
     getToolCountFilePath,
     getToolCountMetrics
 } from './utils/tool-count';
-import { isTodoTool } from './utils/tool-names';
+import {
+    isSkillTool,
+    isSubagentTool,
+    isTodoTool
+} from './utils/tool-names';
 import { prefetchUsageDataIfNeeded } from './utils/usage-prefetch';
 
 function isTodoStatusString(value: unknown): value is TodoStatus {
@@ -327,7 +331,7 @@ async function handleHook(): Promise<void> {
         const path = await import('path');
 
         let skillName = '';
-        if (data.hook_event_name === 'PreToolUse' && data.tool_name === 'Skill') {
+        if (data.hook_event_name === 'PreToolUse' && isSkillTool(data.tool_name)) {
             skillName = data.tool_input?.skill ?? '';
         } else if (data.hook_event_name === 'UserPromptSubmit') {
             const match = /^\/([a-zA-Z0-9_:-]+)(?:\s|$)/.exec(data.prompt ?? '');
@@ -372,7 +376,7 @@ async function handleHook(): Promise<void> {
         // Skill is logged above; don't double-count it here.
         if (data.hook_event_name === 'PreToolUse'
             && data.tool_name
-            && data.tool_name !== 'Skill') {
+            && !isSkillTool(data.tool_name)) {
             const toolCountPath = getToolCountFilePath(sessionId);
             fs.mkdirSync(path.dirname(toolCountPath), { recursive: true });
             const target = extractTarget(data.tool_name, data.tool_input);
@@ -395,7 +399,7 @@ async function handleHook(): Promise<void> {
         // Tool Count — end event (paired with PreToolUse start; enables `activity` mode)
         if (data.hook_event_name === 'PostToolUse'
             && data.tool_name
-            && data.tool_name !== 'Skill'
+            && !isSkillTool(data.tool_name)
             && typeof data.tool_use_id === 'string'
             && data.tool_use_id.length > 0) {
             const toolCountPath = getToolCountFilePath(sessionId);
@@ -413,7 +417,7 @@ async function handleHook(): Promise<void> {
 
         // Agent Activity — start event (Agent subagent began)
         if (data.hook_event_name === 'PreToolUse'
-            && data.tool_name === 'Agent'
+            && isSubagentTool(data.tool_name)
             && typeof data.tool_use_id === 'string'
             && data.tool_use_id.length > 0) {
             const agentPath = getAgentActivityFilePath(sessionId);
@@ -434,7 +438,7 @@ async function handleHook(): Promise<void> {
 
         // Agent Activity — end event (Agent subagent finished)
         if (data.hook_event_name === 'PostToolUse'
-            && data.tool_name === 'Agent'
+            && isSubagentTool(data.tool_name)
             && typeof data.tool_use_id === 'string'
             && data.tool_use_id.length > 0) {
             const agentPath = getAgentActivityFilePath(sessionId);

@@ -18,6 +18,7 @@ import type {
 import type { WidgetHookDef } from '../utils/hooks';
 import { shouldInsertInput } from '../utils/input-guards';
 import { basename } from '../utils/tool-count';
+import { isSubagentTool } from '../utils/tool-names';
 
 import { makeModifierText } from './shared/editor-display';
 import {
@@ -233,7 +234,7 @@ export class ToolCountWidget implements Widget {
     private renderActivity(context: RenderContext, scope: Scope, configuredLimit: number, hideCompleted: boolean): string | null {
         const entries = context.toolCountMetrics?.activity ?? [];
         const filtered = entries.filter((e) => {
-            if (e.tool_name === 'Agent')
+            if (isSubagentTool(e.tool_name))
                 return false;
             if (scope === 'all')
                 return true;
