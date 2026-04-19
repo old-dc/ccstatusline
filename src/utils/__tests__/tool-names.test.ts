@@ -1,13 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import {
+    describe,
+    expect,
+    it
+} from 'vitest';
 
 import {
-    isSkillTool,
-    isSubagentTool,
-    isTodoTool,
     LEGACY_TODO_TOOLS,
     SKILL_TOOL,
     SUBAGENT_TOOLS,
-    TODO_TOOLS
+    TODO_TOOLS,
+    isSkillTool,
+    isSubagentTool,
+    isTodoTool
 } from '../tool-names';
 
 describe('tool-names', () => {
