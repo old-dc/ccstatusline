@@ -704,6 +704,29 @@ export function renderStatusLine(
             if (!hasContentBefore)
                 continue;
 
+            // Also require that some widget *between this separator and the next*
+            // actually rendered content. Without this check, an empty widget that
+            // sits between two separators (e.g. a hideWhenEmpty widget that is
+            // currently null) leaves "| |" — two separators with nothing between
+            // them. Stop the lookahead at the next separator so we only protect
+            // *this* gap; a later separator gets to make its own decision.
+            let hasContentAfter = false;
+            for (let j = i + 1; j < widgets.length; j++) {
+                const nextWidget = widgets[j];
+                if (!nextWidget) {
+                    continue;
+                }
+                if (nextWidget.type === 'separator' || nextWidget.type === 'flex-separator') {
+                    break;
+                }
+                if (preRenderedWidgets[j]?.content) {
+                    hasContentAfter = true;
+                    break;
+                }
+            }
+            if (!hasContentAfter)
+                continue;
+
             const sepChar = widget.character ?? (settings.defaultSeparator ?? '|');
             const formattedSep = formatSeparator(sepChar);
 
