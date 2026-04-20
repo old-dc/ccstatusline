@@ -23,10 +23,7 @@ function parseEvent(line: string, sessionId: string): AgentActivityEvent | null 
             return null;
         }
         const record = parsed as Record<string, unknown>;
-        if (record.event !== 'start' && record.event !== 'end') {
-            return null;
-        }
-        if (typeof record.id !== 'string' || record.id.length === 0) {
+        if (record.event !== 'start' && record.event !== 'end' && record.event !== 'subagent_start') {
             return null;
         }
         if (typeof record.timestamp !== 'string') {
@@ -35,9 +32,24 @@ function parseEvent(line: string, sessionId: string): AgentActivityEvent | null 
         if (typeof record.session_id !== 'string' || record.session_id !== sessionId) {
             return null;
         }
+        const toolUseId = typeof record.id === 'string' && record.id.length > 0 ? record.id : undefined;
+        const agentId = typeof record.agent_id === 'string' && record.agent_id.length > 0
+            ? record.agent_id
+            : undefined;
+        if (record.event === 'subagent_start') {
+            if (!agentId)
+                return null;
+        } else if (record.event === 'start') {
+            if (!toolUseId)
+                return null;
+        } else if (!toolUseId && !agentId) {
+            // 'end' needs at least one key to correlate back to a start
+            return null;
+        }
         return {
             event: record.event,
-            id: record.id,
+            id: toolUseId,
+            agent_id: agentId,
             timestamp: record.timestamp,
             session_id: record.session_id,
             type: typeof record.type === 'string' ? record.type : undefined,
@@ -70,7 +82,7 @@ function extractTurnTimestamp(line: string, sessionId: string): string | null {
 
 function buildAgentEntry(event: AgentActivityEvent): AgentEntry {
     return {
-        id: event.id,
+        id: event.id ?? '',
         type: typeof event.type === 'string' && event.type.length > 0 ? event.type : 'unknown',
         model: typeof event.model === 'string' ? event.model : undefined,
         description: typeof event.description === 'string' ? event.description : undefined,
@@ -89,8 +101,23 @@ export function getAgentActivityMetrics(sessionId: string): AgentActivityMetrics
         const content = fs.readFileSync(filePath, 'utf-8');
         const lines = content.split('\n').filter(line => line.trim().length > 0);
 
+        // agentMap keyed by tool_use_id (the stable identity we display from).
+        // pendingStarts is a FIFO of tool_use_ids from PreToolUse start events
+        // awaiting a SubagentStart companion — we pair them in arrival order.
+        // agentIdToToolUseId lets a SubagentStop end event (which only carries
+        // agent_id) resolve back to the correct tool_use_id.
         const agentMap = new Map<string, AgentEntry>();
+        const pendingStarts: string[] = [];
+        const agentIdToToolUseId = new Map<string, string>();
         let lastTurnMs = 0;
+
+        const markCompleted = (toolUseId: string, timestamp: string): void => {
+            const existing = agentMap.get(toolUseId);
+            if (existing) {
+                existing.status = 'completed';
+                existing.endTime = new Date(timestamp);
+            }
+        };
 
         for (const line of lines) {
             const turnTs = extractTurnTimestamp(line, sessionId);
@@ -106,15 +133,24 @@ export function getAgentActivityMetrics(sessionId: string): AgentActivityMetrics
                 continue;
             }
 
-            if (event.event === 'start') {
+            if (event.event === 'start' && event.id) {
                 if (!agentMap.has(event.id)) {
                     agentMap.set(event.id, buildAgentEntry(event));
+                    pendingStarts.push(event.id);
                 }
-            } else {
-                const existing = agentMap.get(event.id);
-                if (existing) {
-                    existing.status = 'completed';
-                    existing.endTime = new Date(event.timestamp);
+            } else if (event.event === 'subagent_start' && event.agent_id) {
+                const tid = pendingStarts.shift();
+                if (tid !== undefined) {
+                    agentIdToToolUseId.set(event.agent_id, tid);
+                }
+            } else if (event.event === 'end') {
+                if (event.id) {
+                    markCompleted(event.id, event.timestamp);
+                } else if (event.agent_id) {
+                    const tid = agentIdToToolUseId.get(event.agent_id);
+                    if (tid !== undefined) {
+                        markCompleted(tid, event.timestamp);
+                    }
                 }
             }
         }

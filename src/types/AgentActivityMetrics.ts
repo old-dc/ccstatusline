@@ -15,8 +15,9 @@ export interface AgentActivityMetrics { agents: AgentEntry[] }
 export interface AgentActivityEvent {
     timestamp: string;
     session_id: string;
-    event: 'start' | 'end';
-    id: string;
+    event: 'start' | 'end' | 'subagent_start';
+    id?: string;
+    agent_id?: string;
     type?: string;
     model?: string;
     description?: string;

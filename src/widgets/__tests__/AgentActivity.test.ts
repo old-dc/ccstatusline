@@ -31,10 +31,11 @@ describe('AgentActivityWidget — identity', () => {
         )).toBe(true);
     });
 
-    it('registers Agent Pre/Post hooks plus UserPromptSubmit turn marker', () => {
+    it('registers PreToolUse:Agent + SubagentStart/Stop + UserPromptSubmit turn marker', () => {
         expect(widget.getHooks()).toEqual([
             { event: 'PreToolUse', matcher: 'Agent' },
-            { event: 'PostToolUse', matcher: 'Agent' },
+            { event: 'SubagentStart' },
+            { event: 'SubagentStop' },
             { event: 'UserPromptSubmit' }
         ]);
     });

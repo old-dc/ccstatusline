@@ -153,12 +153,13 @@ export class AgentActivityWidget implements Widget {
     supportsColors(_item: WidgetItem): boolean { return true; }
 
     getHooks(): WidgetHookDef[] {
-        const subagentHooks: WidgetHookDef[] = SUBAGENT_TOOLS.flatMap(tool => [
-            { event: 'PreToolUse', matcher: tool } as WidgetHookDef,
-            { event: 'PostToolUse', matcher: tool } as WidgetHookDef
-        ]);
+        const preToolHooks: WidgetHookDef[] = SUBAGENT_TOOLS.map(tool => (
+            { event: 'PreToolUse', matcher: tool } as WidgetHookDef
+        ));
         return [
-            ...subagentHooks,
+            ...preToolHooks,
+            { event: 'SubagentStart' },
+            { event: 'SubagentStop' },
             { event: 'UserPromptSubmit' }
         ];
     }

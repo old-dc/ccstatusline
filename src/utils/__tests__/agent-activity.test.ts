@@ -273,6 +273,96 @@ describe('agent-activity', () => {
         });
     });
 
+    describe('getAgentActivityMetrics — SubagentStop pairing', () => {
+        it('marks agent completed via SubagentStop (agent_id) after FIFO pair with PreToolUse start', () => {
+            writeEvents('s-stop', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-stop',
+                    event: 'start',
+                    id: 'tool-use-1',
+                    type: 'explore'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:00.500Z',
+                    session_id: 's-stop',
+                    event: 'subagent_start',
+                    agent_id: 'agent-A'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:30.000Z',
+                    session_id: 's-stop',
+                    event: 'end',
+                    agent_id: 'agent-A'
+                }
+            ]);
+
+            const agents = getAgentActivityMetrics('s-stop').agents;
+            expect(agents).toHaveLength(1);
+            expect(agents[0]?.id).toBe('tool-use-1');
+            expect(agents[0]?.status).toBe('completed');
+            expect(agents[0]?.endTime?.toISOString()).toBe('2026-04-19T10:00:30.000Z');
+        });
+
+        it('pairs multiple concurrent agents in FIFO order', () => {
+            writeEvents('s-concurrent', [
+                { timestamp: '2026-04-19T10:00:00.000Z', session_id: 's-concurrent', event: 'start', id: 'tu-A', type: 'explore' },
+                { timestamp: '2026-04-19T10:00:00.500Z', session_id: 's-concurrent', event: 'subagent_start', agent_id: 'ag-A' },
+                { timestamp: '2026-04-19T10:00:01.000Z', session_id: 's-concurrent', event: 'start', id: 'tu-B', type: 'reviewer' },
+                { timestamp: '2026-04-19T10:00:01.500Z', session_id: 's-concurrent', event: 'subagent_start', agent_id: 'ag-B' },
+                { timestamp: '2026-04-19T10:00:30.000Z', session_id: 's-concurrent', event: 'end', agent_id: 'ag-B' },
+                { timestamp: '2026-04-19T10:00:40.000Z', session_id: 's-concurrent', event: 'end', agent_id: 'ag-A' }
+            ]);
+
+            const agents = getAgentActivityMetrics('s-concurrent').agents;
+            const byId = new Map(agents.map(a => [a.id, a]));
+            expect(byId.get('tu-A')?.status).toBe('completed');
+            expect(byId.get('tu-A')?.endTime?.toISOString()).toBe('2026-04-19T10:00:40.000Z');
+            expect(byId.get('tu-B')?.status).toBe('completed');
+            expect(byId.get('tu-B')?.endTime?.toISOString()).toBe('2026-04-19T10:00:30.000Z');
+        });
+
+        it('handles batched subagent_start after multiple starts (FIFO order)', () => {
+            // Edge case: two starts arrive, then both subagent_start arrive.
+            writeEvents('s-batched', [
+                { timestamp: '2026-04-19T10:00:00.000Z', session_id: 's-batched', event: 'start', id: 'tu-A', type: 'explore' },
+                { timestamp: '2026-04-19T10:00:00.500Z', session_id: 's-batched', event: 'start', id: 'tu-B', type: 'reviewer' },
+                { timestamp: '2026-04-19T10:00:01.000Z', session_id: 's-batched', event: 'subagent_start', agent_id: 'ag-first' },
+                { timestamp: '2026-04-19T10:00:01.500Z', session_id: 's-batched', event: 'subagent_start', agent_id: 'ag-second' },
+                { timestamp: '2026-04-19T10:00:10.000Z', session_id: 's-batched', event: 'end', agent_id: 'ag-first' }
+            ]);
+
+            const agents = getAgentActivityMetrics('s-batched').agents;
+            const byId = new Map(agents.map(a => [a.id, a]));
+            // ag-first pairs with tu-A (first unpaired start), so tu-A is completed
+            expect(byId.get('tu-A')?.status).toBe('completed');
+            expect(byId.get('tu-B')?.status).toBe('running');
+        });
+
+        it('drops orphan SubagentStop when no subagent_start pair was recorded', () => {
+            writeEvents('s-orphan-stop', [
+                { timestamp: '2026-04-19T10:00:00.000Z', session_id: 's-orphan-stop', event: 'end', agent_id: 'ag-ghost' }
+            ]);
+
+            expect(getAgentActivityMetrics('s-orphan-stop').agents).toEqual([]);
+        });
+
+        it('remains backward-compatible with legacy event:end carrying tool_use_id directly', () => {
+            // Old jsonl files produced by previous ccstatusline versions used
+            // PostToolUse to write `event:end` with `id` = tool_use_id and no
+            // agent_id. The reader must still pair those by id.
+            writeEvents('s-legacy', [
+                { timestamp: '2026-04-19T10:00:00.000Z', session_id: 's-legacy', event: 'start', id: 'tu-legacy', type: 'explore' },
+                { timestamp: '2026-04-19T10:00:05.000Z', session_id: 's-legacy', event: 'end', id: 'tu-legacy' }
+            ]);
+
+            const agents = getAgentActivityMetrics('s-legacy').agents;
+            expect(agents).toHaveLength(1);
+            expect(agents[0]?.status).toBe('completed');
+            expect(agents[0]?.endTime?.toISOString()).toBe('2026-04-19T10:00:05.000Z');
+        });
+    });
+
     describe('getAgentActivityMetrics — turn boundary purge', () => {
         it('drops completed agents that ended before the last turn marker', () => {
             writeEvents('s-turn', [

@@ -312,6 +312,11 @@ interface HookInput {
     };
     tool_response?: unknown;
     prompt?: string;
+    // SubagentStart / SubagentStop payload. Present only for those events;
+    // the dispatcher uses agent_id (not tool_use_id) as its identity, so we
+    // persist it alongside the PreToolUse start for FIFO pairing on read.
+    agent_id?: string;
+    agent_type?: string;
 }
 
 async function handleHook(): Promise<void> {
@@ -437,18 +442,39 @@ async function handleHook(): Promise<void> {
             fs.appendFileSync(agentPath, entry + '\n');
         }
 
-        // Agent Activity — end event (Agent subagent finished)
-        if (data.hook_event_name === 'PostToolUse'
-            && isSubagentTool(data.tool_name)
-            && typeof data.tool_use_id === 'string'
-            && data.tool_use_id.length > 0) {
+        // Agent Activity — pairing row for SubagentStart. SubagentStart carries
+        // agent_id but no tool_use_id; appending it lets the reader FIFO-pair
+        // it with the most recent unpaired PreToolUse start so SubagentStop
+        // can later resolve back to the correct agent entry.
+        if (data.hook_event_name === 'SubagentStart'
+            && typeof data.agent_id === 'string'
+            && data.agent_id.length > 0) {
+            const agentPath = getAgentActivityFilePath(sessionId);
+            fs.mkdirSync(path.dirname(agentPath), { recursive: true });
+            const entry = JSON.stringify({
+                timestamp: new Date().toISOString(),
+                session_id: sessionId,
+                event: 'subagent_start',
+                agent_id: data.agent_id
+            });
+            fs.appendFileSync(agentPath, entry + '\n');
+        }
+
+        // Agent Activity — end event via SubagentStop. This replaces the old
+        // PostToolUse:Agent end source because PostToolUse fires at launch
+        // time for run_in_background subagents, whereas SubagentStop fires
+        // when the subagent actually finishes — giving accurate running/done
+        // state for both foreground and background agents.
+        if (data.hook_event_name === 'SubagentStop'
+            && typeof data.agent_id === 'string'
+            && data.agent_id.length > 0) {
             const agentPath = getAgentActivityFilePath(sessionId);
             fs.mkdirSync(path.dirname(agentPath), { recursive: true });
             const entry = JSON.stringify({
                 timestamp: new Date().toISOString(),
                 session_id: sessionId,
                 event: 'end',
-                id: data.tool_use_id
+                agent_id: data.agent_id
             });
             fs.appendFileSync(agentPath, entry + '\n');
         }
