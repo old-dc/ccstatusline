@@ -10,7 +10,8 @@ import type { TodoItem } from '../../types/TodoProgressMetrics';
 import type { WidgetItem } from '../../types/Widget';
 import {
     TodoProgressWidget,
-    formatTodoProgress
+    formatTodoProgress,
+    formatTodoStatus
 } from '../TodoProgress';
 
 function makeItem(overrides: Partial<WidgetItem> = {}): WidgetItem {
@@ -106,6 +107,45 @@ describe('formatTodoProgress', () => {
     });
 });
 
+describe('formatTodoStatus', () => {
+    it('returns Todo: none when todos empty (label form)', () => {
+        expect(formatTodoStatus([], false)).toBe('Todo: none');
+    });
+
+    it('returns empty string when empty + rawValue', () => {
+        expect(formatTodoStatus([], true)).toBe('');
+    });
+
+    it('counts pending/in_progress/completed and labels TODO/DOING/DONE', () => {
+        const todos: TodoItem[] = [
+            { content: 'a', status: 'pending' },
+            { content: 'b', status: 'pending' },
+            { content: 'c', status: 'in_progress' },
+            { content: 'd', status: 'completed' },
+            { content: 'e', status: 'completed' },
+            { content: 'f', status: 'completed' }
+        ];
+        expect(formatTodoStatus(todos, false)).toBe('Todo: 2 TODO / 1 DOING / 3 DONE');
+    });
+
+    it('rawValue collapses to "pending/in_progress/completed" tri-count', () => {
+        const todos: TodoItem[] = [
+            { content: 'a', status: 'pending' },
+            { content: 'b', status: 'in_progress' },
+            { content: 'c', status: 'completed' }
+        ];
+        expect(formatTodoStatus(todos, true)).toBe('1/1/1');
+    });
+
+    it('writes zero for any empty bucket so format stays stable', () => {
+        const todos: TodoItem[] = [
+            { content: 'a', status: 'completed' },
+            { content: 'b', status: 'completed' }
+        ];
+        expect(formatTodoStatus(todos, false)).toBe('Todo: 0 TODO / 0 DOING / 2 DONE');
+    });
+});
+
 describe('TodoProgressWidget', () => {
     const widget = new TodoProgressWidget();
 
@@ -173,20 +213,63 @@ describe('TodoProgressWidget', () => {
         expect(widget.handleEditorAction('unknown', base)).toBeNull();
     });
 
+    it('cycle-mode rotates current → status → current', () => {
+        const base = makeItem();
+        const a = widget.handleEditorAction('cycle-mode', base);
+        expect(a?.metadata?.mode).toBe('status');
+        const b = widget.handleEditorAction('cycle-mode', a ?? base);
+        expect(b?.metadata?.mode).toBe('current');
+    });
+
+    it('renders status mode breakdown from real metrics', () => {
+        const ctx = makeContext([
+            { content: 'a', status: 'pending' },
+            { content: 'b', status: 'pending' },
+            { content: 'c', status: 'in_progress' },
+            { content: 'd', status: 'completed' },
+            { content: 'e', status: 'completed' },
+            { content: 'f', status: 'completed' }
+        ]);
+        const item = makeItem({ metadata: { mode: 'status' } });
+        expect(widget.render(item, ctx, settings)).toBe('Todo: 2 TODO / 1 DOING / 3 DONE');
+    });
+
+    it('renders status mode rawValue without label', () => {
+        const ctx = makeContext([
+            { content: 'a', status: 'pending' },
+            { content: 'b', status: 'in_progress' },
+            { content: 'c', status: 'completed' }
+        ]);
+        const item = makeItem({ rawValue: true, metadata: { mode: 'status' } });
+        expect(widget.render(item, ctx, settings)).toBe('1/1/1');
+    });
+
+    it('renders status mode preview sample', () => {
+        // Sample is 3 pending + 1 in_progress + 1 completed.
+        const item = makeItem({ metadata: { mode: 'status' } });
+        expect(widget.render(item, { isPreview: true }, settings))
+            .toBe('Todo: 3 TODO / 1 DOING / 1 DONE');
+    });
+
     it('builds editor display modifiers in order', () => {
         const item = makeItem({ metadata: { hideContent: 'true', hideProgress: 'true', hideWhenEmpty: 'true' } });
         const display = widget.getEditorDisplay(item);
         expect(display.displayText).toBe('Todo Progress');
-        expect(display.modifierText).toBe('(no content, no progress, hide when empty)');
+        expect(display.modifierText).toBe('(current, no content, no progress, hide when empty)');
     });
 
-    it('returns no modifiers when flags clean', () => {
-        expect(widget.getEditorDisplay(makeItem()).modifierText).toBeUndefined();
+    it('shows just the mode label when no other flags set', () => {
+        expect(widget.getEditorDisplay(makeItem()).modifierText).toBe('(current)');
+    });
+
+    it('shows status label when mode is status', () => {
+        const item = makeItem({ metadata: { mode: 'status' } });
+        expect(widget.getEditorDisplay(item).modifierText).toBe('(status)');
     });
 
     it('surfaces stale minutes in editor modifier when configured', () => {
         const item = makeItem({ metadata: { staleMinutes: '30' } });
-        expect(widget.getEditorDisplay(item).modifierText).toBe('(stale: 30m)');
+        expect(widget.getEditorDisplay(item).modifierText).toBe('(current, stale: 30m)');
     });
 
     it('treats snapshot as empty when staleMinutes exceeded', () => {

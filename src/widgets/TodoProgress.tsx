@@ -24,11 +24,19 @@ import {
     toggleMetadataFlag
 } from './shared/metadata';
 
+type Mode = 'current' | 'status';
+const MODES: Mode[] = ['current', 'status'];
+const MODE_LABELS: Record<Mode, string> = {
+    current: 'current',
+    status: 'status'
+};
+
 const HIDE_WHEN_EMPTY_KEY = 'hideWhenEmpty';
 const HIDE_PROGRESS_KEY = 'hideProgress';
 const HIDE_CONTENT_KEY = 'hideContent';
 const STALE_MINUTES_KEY = 'staleMinutes';
 
+const CYCLE_MODE_ACTION = 'cycle-mode';
 const TOGGLE_HIDE_EMPTY_ACTION = 'toggle-hide-empty';
 const TOGGLE_HIDE_PROGRESS_ACTION = 'toggle-hide-progress';
 const TOGGLE_HIDE_CONTENT_ACTION = 'toggle-hide-content';
@@ -73,6 +81,32 @@ export function formatTodoProgress(
     return rawValue ? body : `Todo: ${body}`;
 }
 
+export function formatTodoStatus(todos: TodoItem[], rawValue: boolean): string {
+    if (todos.length === 0) {
+        return rawValue ? '' : 'Todo: none';
+    }
+    let pending = 0;
+    let doing = 0;
+    let done = 0;
+    for (const t of todos) {
+        switch (t.status) {
+            case 'pending':
+                pending += 1;
+                break;
+            case 'in_progress':
+                doing += 1;
+                break;
+            case 'completed':
+                done += 1;
+                break;
+        }
+    }
+    if (rawValue) {
+        return `${pending}/${doing}/${done}`;
+    }
+    return `Todo: ${pending} TODO / ${doing} DOING / ${done} DONE`;
+}
+
 export class TodoProgressWidget implements Widget {
     getDefaultColor(): string { return 'yellow'; }
     getDescription(): string {
@@ -94,7 +128,8 @@ export class TodoProgressWidget implements Widget {
     }
 
     getEditorDisplay(item: WidgetItem): WidgetEditorDisplay {
-        const modifiers: string[] = [];
+        const mode = this.getMode(item);
+        const modifiers: string[] = [MODE_LABELS[mode]];
         if (this.shouldHideContent(item)) {
             modifiers.push('no content');
         }
@@ -116,6 +151,7 @@ export class TodoProgressWidget implements Widget {
 
     getCustomKeybinds(_item?: WidgetItem): CustomKeybind[] {
         return [
+            { key: 'v', label: '(v)iew: current/status', action: CYCLE_MODE_ACTION },
             { key: 'p', label: '(p)rogress', action: TOGGLE_HIDE_PROGRESS_ACTION },
             { key: 't', label: '(t)ext', action: TOGGLE_HIDE_CONTENT_ACTION },
             { key: 'h', label: '(h)ide when empty', action: TOGGLE_HIDE_EMPTY_ACTION },
@@ -124,6 +160,12 @@ export class TodoProgressWidget implements Widget {
     }
 
     handleEditorAction(action: string, item: WidgetItem): WidgetItem | null {
+        if (action === CYCLE_MODE_ACTION) {
+            const currentMode = this.getMode(item);
+            const nextIndex = (MODES.indexOf(currentMode) + 1) % MODES.length;
+            const nextMode = MODES[nextIndex] ?? 'current';
+            return { ...item, metadata: { ...item.metadata, mode: nextMode } };
+        }
         if (action === TOGGLE_HIDE_PROGRESS_ACTION) {
             return toggleMetadataFlag(item, HIDE_PROGRESS_KEY);
         }
@@ -143,23 +185,23 @@ export class TodoProgressWidget implements Widget {
 
     render(item: WidgetItem, context: RenderContext, _settings: Settings): string | null {
         const rawValue = item.rawValue === true;
+        const mode = this.getMode(item);
         const flags: TodoDisplayFlags = {
             hideProgress: this.shouldHideProgress(item),
             hideContent: this.shouldHideContent(item)
         };
 
         if (context.isPreview) {
-            return formatTodoProgress(
-                [
-                    { content: 'Write tests', status: 'completed' },
-                    { content: 'Fix authentication bug', status: 'in_progress' },
-                    { content: 'Add docs', status: 'pending' },
-                    { content: 'Ship release', status: 'pending' },
-                    { content: 'Cleanup', status: 'pending' }
-                ],
-                flags,
-                rawValue
-            );
+            const sample: TodoItem[] = [
+                { content: 'Write tests', status: 'completed' },
+                { content: 'Fix authentication bug', status: 'in_progress' },
+                { content: 'Add docs', status: 'pending' },
+                { content: 'Ship release', status: 'pending' },
+                { content: 'Cleanup', status: 'pending' }
+            ];
+            return mode === 'status'
+                ? formatTodoStatus(sample, rawValue)
+                : formatTodoProgress(sample, flags, rawValue);
         }
 
         const metrics = context.todoProgressMetrics;
@@ -175,7 +217,14 @@ export class TodoProgressWidget implements Widget {
             return rawValue ? '' : 'Todo: none';
         }
 
-        return formatTodoProgress(todos, flags, rawValue);
+        return mode === 'status'
+            ? formatTodoStatus(todos, rawValue)
+            : formatTodoProgress(todos, flags, rawValue);
+    }
+
+    private getMode(item: WidgetItem): Mode {
+        const raw = item.metadata?.mode;
+        return raw !== undefined && (MODES as string[]).includes(raw) ? raw as Mode : 'current';
     }
 
     private shouldHideProgress(item: WidgetItem): boolean {
