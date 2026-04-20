@@ -305,6 +305,49 @@ describe('AgentActivityWidget.render — core modes', () => {
         expect(widget.render(listItem, ctx, DEFAULT_SETTINGS))
             .toBe('Agents: explore ×2, code-reviewer ×1');
     });
+
+    it('summary mode shows running and total counts', () => {
+        const extra: AgentEntry = { ...runningAgent, id: 'r2' };
+        const ctx = makeContext([runningAgent, completedAgent, extra]);
+        const summaryItem: WidgetItem = { ...item, metadata: { mode: 'summary' } };
+        expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS))
+            .toBe('Agents: 2 running / 3 total');
+    });
+
+    it('summary mode shows "idle" when no agents and hideWhenEmpty off', () => {
+        const summaryItem: WidgetItem = { ...item, metadata: { mode: 'summary' } };
+        expect(widget.render(summaryItem, makeContext([]), DEFAULT_SETTINGS))
+            .toBe('Agents: idle');
+    });
+
+    it('summary mode returns null when empty and hideWhenEmpty on', () => {
+        const summaryItem: WidgetItem = {
+            ...item,
+            metadata: { mode: 'summary', hideWhenEmpty: 'true' }
+        };
+        expect(widget.render(summaryItem, makeContext([]), DEFAULT_SETTINGS))
+            .toBeNull();
+    });
+
+    it('summary rawValue returns "running/total" without label', () => {
+        const ctx = makeContext([runningAgent, completedAgent]);
+        const summaryItem: WidgetItem = {
+            ...item,
+            rawValue: true,
+            metadata: { mode: 'summary' }
+        };
+        expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS)).toBe('1/2');
+    });
+
+    it('summary rawValue returns "0/0" when empty and hideWhenEmpty off', () => {
+        const summaryItem: WidgetItem = {
+            ...item,
+            rawValue: true,
+            metadata: { mode: 'summary' }
+        };
+        expect(widget.render(summaryItem, makeContext([]), DEFAULT_SETTINGS))
+            .toBe('0/0');
+    });
 });
 
 describe('AgentActivityWidget.render — legacy metadata', () => {
@@ -420,6 +463,22 @@ describe('AgentActivityWidget.render — preview', () => {
         expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS)).toBe('Agents: 3');
     });
 
+    it('summary preview shows running/total sample', () => {
+        const item: WidgetItem = { id: 'a', type: 'agent-activity', metadata: { mode: 'summary' } };
+        expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS))
+            .toBe('Agents: 1 running / 3 total');
+    });
+
+    it('summary preview rawValue shows "1/3"', () => {
+        const item: WidgetItem = {
+            id: 'a',
+            type: 'agent-activity',
+            rawValue: true,
+            metadata: { mode: 'summary' }
+        };
+        expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS)).toBe('1/3');
+    });
+
     it('list preview shows aggregated sample', () => {
         const item: WidgetItem = { id: 'a', type: 'agent-activity', metadata: { mode: 'list' } };
         expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS))
@@ -494,7 +553,7 @@ describe('AgentActivityWidget.handleEditorAction', () => {
     const widget = new AgentActivityWidget();
     const base: WidgetItem = { id: 'a', type: 'agent-activity' };
 
-    it('cycle-mode progresses activity → current → count → list → activity', () => {
+    it('cycle-mode progresses activity → current → count → list → summary → activity', () => {
         // default mode is 'activity'
         const a = widget.handleEditorAction('cycle-mode', base);
         expect(a?.metadata?.mode).toBe('current');
@@ -503,7 +562,9 @@ describe('AgentActivityWidget.handleEditorAction', () => {
         const c = widget.handleEditorAction('cycle-mode', b ?? base);
         expect(c?.metadata?.mode).toBe('list');
         const d = widget.handleEditorAction('cycle-mode', c ?? base);
-        expect(d?.metadata?.mode).toBe('activity');
+        expect(d?.metadata?.mode).toBe('summary');
+        const e = widget.handleEditorAction('cycle-mode', d ?? base);
+        expect(e?.metadata?.mode).toBe('activity');
     });
 
     it('toggle-hide-model flips flag', () => {
@@ -560,6 +621,11 @@ describe('AgentActivityWidget.getEditorDisplay', () => {
     it('shows list label for list mode', () => {
         const display = widget.getEditorDisplay({ id: 'a', type: 'agent-activity', metadata: { mode: 'list' } });
         expect(display.modifierText).toBe('(list)');
+    });
+
+    it('shows summary label for summary mode', () => {
+        const display = widget.getEditorDisplay({ id: 'a', type: 'agent-activity', metadata: { mode: 'summary' } });
+        expect(display.modifierText).toBe('(summary)');
     });
 
     it('appends running only when hideCompleted set on activity mode', () => {

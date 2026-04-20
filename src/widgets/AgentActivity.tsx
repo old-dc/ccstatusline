@@ -25,13 +25,14 @@ import {
     toggleMetadataFlag
 } from './shared/metadata';
 
-type Mode = 'current' | 'count' | 'list' | 'activity';
-const MODES: Mode[] = ['current', 'count', 'list', 'activity'];
+type Mode = 'current' | 'count' | 'list' | 'activity' | 'summary';
+const MODES: Mode[] = ['current', 'count', 'list', 'summary', 'activity'];
 const MODE_LABELS: Record<Mode, string> = {
     current: 'current',
     count: 'count',
     list: 'list',
-    activity: 'activity'
+    activity: 'activity',
+    summary: 'summary'
 };
 
 const LIMIT_DEFAULT = 3;
@@ -274,6 +275,18 @@ export class AgentActivityWidget implements Widget {
             return rawValue ? String(total) : `Agents: ${total}`;
         }
 
+        if (mode === 'summary') {
+            const total = allAgents.length;
+            const running = allAgents.filter(a => a.status === 'running').length;
+            if (hideWhenEmpty && total === 0)
+                return null;
+            if (total === 0)
+                return rawValue ? '0/0' : 'Agents: idle';
+            return rawValue
+                ? `${running}/${total}`
+                : `Agents: ${running} running / ${total} total`;
+        }
+
         if (mode === 'list') {
             const byType = new Map<string, number>();
             for (const a of allAgents) {
@@ -321,6 +334,9 @@ export class AgentActivityWidget implements Widget {
     private renderPreview(mode: Mode, rawValue: boolean, hideCompleted: boolean): string {
         if (mode === 'count') {
             return rawValue ? '3' : 'Agents: 3';
+        }
+        if (mode === 'summary') {
+            return rawValue ? '1/3' : 'Agents: 1 running / 3 total';
         }
         if (mode === 'list') {
             const body = 'explore ×2, code-reviewer ×1';
