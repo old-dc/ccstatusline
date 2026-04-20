@@ -20,6 +20,11 @@ export const WidgetItemSchema = z.object({
     timeout: z.number().optional(),
     merge: z.union([z.boolean(), z.literal('no-padding')]).optional(),
     hide: z.boolean().optional(),
+    // When true, the renderer treats this widget as decorative: the row is
+    // suppressed entirely if no *non-decorative, non-separator* widget on the
+    // same row has content. Typical use: an emoji prefix that should vanish
+    // when all its companion widgets are hidden (hideWhenEmpty).
+    hideWhenAlone: z.boolean().optional(),
     metadata: z.record(z.string(), z.string()).optional()
 });
 

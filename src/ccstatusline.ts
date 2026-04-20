@@ -36,6 +36,7 @@ import {
 import { advanceGlobalPowerlineThemeIndex } from './utils/powerline-theme-index';
 import {
     calculateMaxWidthsFromPreRendered,
+    lineHasMeaningfulContent,
     preRenderAllWidgets,
     renderStatusLine
 } from './utils/renderer';
@@ -227,10 +228,12 @@ async function renderMultipleLines(data: StatusJSON) {
             };
             const line = renderStatusLine(lineItems, settings, lineContext, preRenderedWidgets, preCalculatedMaxWidths);
 
-            // Only output the line if it has content (not just ANSI codes)
-            // Strip ANSI codes to check if there's actual text
+            // Only output the line if it has content (not just ANSI codes).
+            // hideWhenAlone check first: if every non-decorative widget is
+            // empty, suppress the row so decorative widgets (emoji prefixes)
+            // don't appear orphaned on an otherwise empty line.
             const strippedLine = getVisibleText(line).trim();
-            if (strippedLine.length > 0) {
+            if (lineHasMeaningfulContent(preRenderedWidgets) && strippedLine.length > 0) {
                 // Replace all spaces with non-breaking spaces to prevent VSCode trimming
                 let outputLine = line.replace(/ /g, '\u00A0');
 

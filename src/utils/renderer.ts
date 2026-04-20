@@ -486,6 +486,26 @@ export interface PreRenderedWidget {
     widget: WidgetItem;   // Original widget config
 }
 
+// Returns true if the row carries real content — i.e. at least one widget
+// that is not a separator and not flagged `hideWhenAlone` produced visible
+// output. Used to decide whether the whole row (including any decorative
+// widgets on it) should be emitted.
+export function lineHasMeaningfulContent(preRenderedWidgets: PreRenderedWidget[]): boolean {
+    for (const pre of preRenderedWidgets) {
+        const w = pre.widget;
+        if (w.type === 'separator' || w.type === 'flex-separator') {
+            continue;
+        }
+        if (w.hideWhenAlone === true) {
+            continue;
+        }
+        if (pre.plainLength > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Pre-render all widgets once and cache the results
 export function preRenderAllWidgets(
     allLinesWidgets: WidgetItem[][],
