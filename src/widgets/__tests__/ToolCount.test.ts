@@ -87,6 +87,34 @@ describe('ToolCountWidget — activity mode', () => {
         expect(out).toBe('Tools: ◐ Bash');
     });
 
+    it('aggregates concurrent running invocations of the same tool to ×N (drops targets)', () => {
+        const activity = makeActivity([
+            { tool_name: 'Bash', status: 'running', target: '/install.sh' },
+            { tool_name: 'Bash', status: 'running', target: '/run-tests.sh' },
+            { tool_name: 'Edit', status: 'running', target: '/repo/src/auth.ts' }
+        ]);
+        const out = widget.render(
+            makeItem({ metadata: activityMode }),
+            makeContext({ activity }),
+            settings
+        );
+        // Bash collapses to ×2; Edit (single) keeps its target hint.
+        expect(out).toBe('Tools: ◐ Bash ×2 | ◐ Edit: auth.ts');
+    });
+
+    it('keeps target on each single-running tool when different tools run concurrently', () => {
+        const activity = makeActivity([
+            { tool_name: 'Bash', status: 'running', target: '/install.sh' },
+            { tool_name: 'Read', status: 'running', target: '/repo/foo.ts' }
+        ]);
+        const out = widget.render(
+            makeItem({ metadata: activityMode }),
+            makeContext({ activity }),
+            settings
+        );
+        expect(out).toBe('Tools: ◐ Bash: install.sh | ◐ Read: foo.ts');
+    });
+
     it('filters Agent tool out of activity output', () => {
         const activity = makeActivity([
             { tool_name: 'Agent', status: 'running', target: 'explore' },

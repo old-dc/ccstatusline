@@ -267,10 +267,26 @@ export class ToolCountWidget implements Widget {
             })
             .slice(0, topLimit);
 
-        const runningParts = running.map((r) => {
-            const targetPart = r.target ? `: ${basename(r.target)}` : '';
-            return `◐ ${r.tool_name}${targetPart}`;
-        });
+        // Aggregate concurrent running invocations of the same tool. Showing
+        // each one separately ("◐ Bash | ◐ Bash") is visual noise; collapse
+        // to "◐ Bash ×N". When there's only one of a given tool, keep its
+        // target hint (it's a useful "what is it doing" signal).
+        const runningByName = new Map<string, ToolActivityEntry[]>();
+        for (const r of running) {
+            const list = runningByName.get(r.tool_name) ?? [];
+            list.push(r);
+            runningByName.set(r.tool_name, list);
+        }
+        const runningParts: string[] = [];
+        for (const [name, entries] of runningByName) {
+            if (entries.length === 1) {
+                const r = entries[0];
+                const targetPart = r?.target ? `: ${basename(r.target)}` : '';
+                runningParts.push(`◐ ${name}${targetPart}`);
+            } else {
+                runningParts.push(`◐ ${name} ×${entries.length}`);
+            }
+        }
         const completedParts = topCompleted.map(([name, count]) => (
             count > 1 ? `✓ ${name} ×${count}` : `✓ ${name}`
         ));
