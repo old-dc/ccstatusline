@@ -104,7 +104,14 @@ export function formatTodoStatus(todos: TodoItem[], rawValue: boolean): string {
     if (rawValue) {
         return `${pending}/${doing}/${done}`;
     }
-    return `Todo: ${pending} TODO / ${doing} DOING / ${done} DONE`;
+    const parts: string[] = [];
+    if (pending > 0)
+        parts.push(`☐ Todo ×${pending}`);
+    if (doing > 0)
+        parts.push(`◐ Doing ×${doing}`);
+    if (done > 0)
+        parts.push(`✓ Done ×${done}`);
+    return `Todo: ${parts.join(' | ')}`;
 }
 
 export class TodoProgressWidget implements Widget {

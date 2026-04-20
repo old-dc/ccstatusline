@@ -307,13 +307,27 @@ describe('AgentActivityWidget.render — core modes', () => {
             .toBe('Agents: explore ×2, code-reviewer ×1');
     });
 
-    it('summary mode shows running and completed counts', () => {
+    it('summary mode omits ✓ bucket when no completed agents', () => {
+        const ctx = makeContext([runningAgent, { ...runningAgent, id: 'r2' }]);
+        const summaryItem: WidgetItem = { ...item, metadata: { mode: 'summary' } };
+        // 2 running + 0 completed → only ◐ bucket
+        expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS)).toBe('Agents: ◐ Running ×2');
+    });
+
+    it('summary mode omits ◐ bucket when no running agents', () => {
+        const ctx = makeContext([completedAgent]);
+        const summaryItem: WidgetItem = { ...item, metadata: { mode: 'summary' } };
+        // 0 running + 1 completed → only ✓ bucket
+        expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS)).toBe('Agents: ✓ Completed ×1');
+    });
+
+    it('summary mode shows both buckets when both non-zero', () => {
         const extra: AgentEntry = { ...runningAgent, id: 'r2' };
         const ctx = makeContext([runningAgent, completedAgent, extra]);
         const summaryItem: WidgetItem = { ...item, metadata: { mode: 'summary' } };
         // 2 running (runningAgent + extra) + 1 completed (completedAgent)
         expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS))
-            .toBe('Agents: 2 running / 1 completed');
+            .toBe('Agents: ◐ Running ×2 | ✓ Completed ×1');
     });
 
     it('summary mode shows "idle" when no agents and hideWhenEmpty off', () => {
@@ -331,7 +345,7 @@ describe('AgentActivityWidget.render — core modes', () => {
             .toBeNull();
     });
 
-    it('summary rawValue returns "running/completed" without label', () => {
+    it('summary rawValue returns "RUNNING/COMPLETED" numeric ratio without label', () => {
         const ctx = makeContext([runningAgent, completedAgent]);
         const summaryItem: WidgetItem = {
             ...item,
@@ -466,10 +480,10 @@ describe('AgentActivityWidget.render — preview', () => {
         expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS)).toBe('Agents: 3');
     });
 
-    it('summary preview shows running/completed sample', () => {
+    it('summary preview shows RUNNING/COMPLETED sample', () => {
         const item: WidgetItem = { id: 'a', type: 'agent-activity', metadata: { mode: 'summary' } };
         expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS))
-            .toBe('Agents: 1 running / 2 completed');
+            .toBe('Agents: ◐ Running ×1 | ✓ Completed ×2');
     });
 
     it('summary preview rawValue shows "1/2"', () => {

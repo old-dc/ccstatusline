@@ -284,9 +284,14 @@ export class AgentActivityWidget implements Widget {
                 return null;
             if (total === 0)
                 return rawValue ? '0/0' : 'Agents: idle';
-            return rawValue
-                ? `${running}/${completed}`
-                : `Agents: ${running} running / ${completed} completed`;
+            if (rawValue)
+                return `${running}/${completed}`;
+            const parts: string[] = [];
+            if (running > 0)
+                parts.push(`◐ Running ×${running}`);
+            if (completed > 0)
+                parts.push(`✓ Completed ×${completed}`);
+            return `Agents: ${parts.join(' | ')}`;
         }
 
         if (mode === 'list') {
@@ -338,7 +343,7 @@ export class AgentActivityWidget implements Widget {
             return rawValue ? '3' : 'Agents: 3';
         }
         if (mode === 'summary') {
-            return rawValue ? '1/2' : 'Agents: 1 running / 2 completed';
+            return rawValue ? '1/2' : 'Agents: ◐ Running ×1 | ✓ Completed ×2';
         }
         if (mode === 'list') {
             const body = 'explore ×2, code-reviewer ×1';

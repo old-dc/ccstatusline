@@ -125,7 +125,7 @@ describe('formatTodoStatus', () => {
             { content: 'e', status: 'completed' },
             { content: 'f', status: 'completed' }
         ];
-        expect(formatTodoStatus(todos, false)).toBe('Todo: 2 TODO / 1 DOING / 3 DONE');
+        expect(formatTodoStatus(todos, false)).toBe('Todo: ☐ Todo ×2 | ◐ Doing ×1 | ✓ Done ×3');
     });
 
     it('rawValue collapses to "pending/in_progress/completed" tri-count', () => {
@@ -137,12 +137,38 @@ describe('formatTodoStatus', () => {
         expect(formatTodoStatus(todos, true)).toBe('1/1/1');
     });
 
-    it('writes zero for any empty bucket so format stays stable', () => {
+    it('omits empty buckets (only ✓ when nothing else)', () => {
         const todos: TodoItem[] = [
             { content: 'a', status: 'completed' },
             { content: 'b', status: 'completed' }
         ];
-        expect(formatTodoStatus(todos, false)).toBe('Todo: 0 TODO / 0 DOING / 2 DONE');
+        expect(formatTodoStatus(todos, false)).toBe('Todo: ✓ Done ×2');
+    });
+
+    it('omits empty buckets (pending-only)', () => {
+        const todos: TodoItem[] = [
+            { content: 'a', status: 'pending' },
+            { content: 'b', status: 'pending' },
+            { content: 'c', status: 'pending' }
+        ];
+        expect(formatTodoStatus(todos, false)).toBe('Todo: ☐ Todo ×3');
+    });
+
+    it('omits empty buckets (no pending, has doing + done)', () => {
+        const todos: TodoItem[] = [
+            { content: 'a', status: 'in_progress' },
+            { content: 'b', status: 'completed' },
+            { content: 'c', status: 'completed' }
+        ];
+        expect(formatTodoStatus(todos, false)).toBe('Todo: ◐ Doing ×1 | ✓ Done ×2');
+    });
+
+    it('rawValue still reports all three buckets even when some are zero', () => {
+        const todos: TodoItem[] = [
+            { content: 'a', status: 'completed' },
+            { content: 'b', status: 'completed' }
+        ];
+        expect(formatTodoStatus(todos, true)).toBe('0/0/2');
     });
 });
 
@@ -231,7 +257,7 @@ describe('TodoProgressWidget', () => {
             { content: 'f', status: 'completed' }
         ]);
         const item = makeItem({ metadata: { mode: 'status' } });
-        expect(widget.render(item, ctx, settings)).toBe('Todo: 2 TODO / 1 DOING / 3 DONE');
+        expect(widget.render(item, ctx, settings)).toBe('Todo: ☐ Todo ×2 | ◐ Doing ×1 | ✓ Done ×3');
     });
 
     it('renders status mode rawValue without label', () => {
@@ -248,7 +274,7 @@ describe('TodoProgressWidget', () => {
         // Sample is 3 pending + 1 in_progress + 1 completed.
         const item = makeItem({ metadata: { mode: 'status' } });
         expect(widget.render(item, { isPreview: true }, settings))
-            .toBe('Todo: 3 TODO / 1 DOING / 1 DONE');
+            .toBe('Todo: ☐ Todo ×3 | ◐ Doing ×1 | ✓ Done ×1');
     });
 
     it('builds editor display modifiers in order', () => {
