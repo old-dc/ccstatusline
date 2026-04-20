@@ -279,13 +279,14 @@ export class AgentActivityWidget implements Widget {
         if (mode === 'summary') {
             const total = allAgents.length;
             const running = allAgents.filter(a => a.status === 'running').length;
+            const completed = total - running;
             if (hideWhenEmpty && total === 0)
                 return null;
             if (total === 0)
                 return rawValue ? '0/0' : 'Agents: idle';
             return rawValue
-                ? `${running}/${total}`
-                : `Agents: ${running} running / ${total} total`;
+                ? `${running}/${completed}`
+                : `Agents: ${running} running / ${completed} completed`;
         }
 
         if (mode === 'list') {
@@ -337,7 +338,7 @@ export class AgentActivityWidget implements Widget {
             return rawValue ? '3' : 'Agents: 3';
         }
         if (mode === 'summary') {
-            return rawValue ? '1/3' : 'Agents: 1 running / 3 total';
+            return rawValue ? '1/2' : 'Agents: 1 running / 2 completed';
         }
         if (mode === 'list') {
             const body = 'explore ×2, code-reviewer ×1';

@@ -307,12 +307,13 @@ describe('AgentActivityWidget.render — core modes', () => {
             .toBe('Agents: explore ×2, code-reviewer ×1');
     });
 
-    it('summary mode shows running and total counts', () => {
+    it('summary mode shows running and completed counts', () => {
         const extra: AgentEntry = { ...runningAgent, id: 'r2' };
         const ctx = makeContext([runningAgent, completedAgent, extra]);
         const summaryItem: WidgetItem = { ...item, metadata: { mode: 'summary' } };
+        // 2 running (runningAgent + extra) + 1 completed (completedAgent)
         expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS))
-            .toBe('Agents: 2 running / 3 total');
+            .toBe('Agents: 2 running / 1 completed');
     });
 
     it('summary mode shows "idle" when no agents and hideWhenEmpty off', () => {
@@ -330,14 +331,15 @@ describe('AgentActivityWidget.render — core modes', () => {
             .toBeNull();
     });
 
-    it('summary rawValue returns "running/total" without label', () => {
+    it('summary rawValue returns "running/completed" without label', () => {
         const ctx = makeContext([runningAgent, completedAgent]);
         const summaryItem: WidgetItem = {
             ...item,
             rawValue: true,
             metadata: { mode: 'summary' }
         };
-        expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS)).toBe('1/2');
+        // 1 running + 1 completed
+        expect(widget.render(summaryItem, ctx, DEFAULT_SETTINGS)).toBe('1/1');
     });
 
     it('summary rawValue returns "0/0" when empty and hideWhenEmpty off', () => {
@@ -464,20 +466,20 @@ describe('AgentActivityWidget.render — preview', () => {
         expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS)).toBe('Agents: 3');
     });
 
-    it('summary preview shows running/total sample', () => {
+    it('summary preview shows running/completed sample', () => {
         const item: WidgetItem = { id: 'a', type: 'agent-activity', metadata: { mode: 'summary' } };
         expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS))
-            .toBe('Agents: 1 running / 3 total');
+            .toBe('Agents: 1 running / 2 completed');
     });
 
-    it('summary preview rawValue shows "1/3"', () => {
+    it('summary preview rawValue shows "1/2"', () => {
         const item: WidgetItem = {
             id: 'a',
             type: 'agent-activity',
             rawValue: true,
             metadata: { mode: 'summary' }
         };
-        expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS)).toBe('1/3');
+        expect(widget.render(item, makeContext([], true), DEFAULT_SETTINGS)).toBe('1/2');
     });
 
     it('list preview shows aggregated sample', () => {
