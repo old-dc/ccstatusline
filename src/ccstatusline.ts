@@ -529,6 +529,7 @@ async function handleHook(): Promise<void> {
             const entry = JSON.stringify({
                 timestamp: new Date().toISOString(),
                 session_id: sessionId,
+                source: data.tool_name,
                 todos: nextTodos
             });
             fs.appendFileSync(todoPath, entry + '\n');

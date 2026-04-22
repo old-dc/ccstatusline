@@ -245,6 +245,44 @@ describe('todo-progress', () => {
 
             expect(getTodoProgressMetrics('s-own').todos).toHaveLength(1);
         });
+
+        it('does NOT purge TaskCreate/TaskUpdate snapshots across turn markers', () => {
+            // TaskCreate/TaskUpdate are incremental + cross-turn persistent.
+            // Even if the snapshot predates the latest turn marker, todos
+            // must survive until explicitly deleted via TaskUpdate(deleted).
+            writeLines('s-task-persist', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-task-persist',
+                    source: 'TaskCreate',
+                    todos: [{ id: '1', content: 'Background research', status: 'pending' }]
+                },
+                { timestamp: '2026-04-19T10:05:00.000Z', session_id: 's-task-persist', event: 'turn' }
+            ]);
+
+            const metrics = getTodoProgressMetrics('s-task-persist');
+            expect(metrics.todos).toEqual([
+                { id: '1', content: 'Background research', status: 'pending' }
+            ]);
+            expect(metrics.source).toBe('TaskCreate');
+        });
+
+        it('legacy snapshots (no source field) still purge on turn boundary like TodoWrite', () => {
+            // Back-compat: jsonl rows written before the `source` field was
+            // added must keep behaving as TodoWrite snapshots.
+            writeLines('s-legacy', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-legacy',
+                    todos: [{ content: 'Old task', status: 'in_progress' }]
+                },
+                { timestamp: '2026-04-19T10:05:00.000Z', session_id: 's-legacy', event: 'turn' }
+            ]);
+
+            const metrics = getTodoProgressMetrics('s-legacy');
+            expect(metrics.todos).toEqual([]);
+            expect(metrics.timestamp).toBe('2026-04-19T10:00:00.000Z');
+        });
     });
 });
 

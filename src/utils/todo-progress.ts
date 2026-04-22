@@ -85,7 +85,8 @@ function parseSnapshot(line: string, sessionId: string): TodoProgressMetrics | n
                 todos.push(normalized);
             }
         }
-        return { todos, timestamp: record.timestamp };
+        const source = typeof record.source === 'string' ? record.source : null;
+        return { todos, timestamp: record.timestamp, source };
     } catch {
         return null;
     }
@@ -123,13 +124,18 @@ export function getTodoProgressMetrics(sessionId: string): TodoProgressMetrics {
             return { todos: [], timestamp: null };
         }
 
-        // Turn-boundary purge: if the last snapshot predates the most recent
-        // UserPromptSubmit turn marker, treat it as empty — the user has moved
-        // on to a new conversation turn and the old todos are stale.
-        if (lastTurnMs > 0 && lastSnapshot.timestamp !== null) {
+        // Turn-boundary purge: only applies to TodoWrite snapshots. TodoWrite
+        // rewrites the full list each turn, so stale cross-turn state should
+        // be dropped. TaskCreate / TaskUpdate are incremental + cross-turn
+        // persistent by design — they must survive turn boundaries until
+        // explicitly deleted. Legacy snapshots (source == null) predate this
+        // field and are treated as TodoWrite for back-compat.
+        const source = lastSnapshot.source ?? null;
+        const isTodoWriteSnapshot = source === null || source === 'TodoWrite';
+        if (isTodoWriteSnapshot && lastTurnMs > 0 && lastSnapshot.timestamp !== null) {
             const snapshotMs = new Date(lastSnapshot.timestamp).getTime();
             if (!Number.isNaN(snapshotMs) && snapshotMs < lastTurnMs) {
-                return { todos: [], timestamp: lastSnapshot.timestamp };
+                return { todos: [], timestamp: lastSnapshot.timestamp, source };
             }
         }
 
