@@ -6,7 +6,10 @@ export const SKILL_TOOL = 'Skill';
 
 export const SUBAGENT_TOOLS = ['Agent'] as const;
 
-export const TODO_TOOLS = ['TaskCreate', 'TaskUpdate', 'TaskList'] as const;
+// Only tools that mutate todo state belong here — TodoProgress.getHooks()
+// must register a PostToolUse hook for every name in this set. TaskList is
+// read-only and intentionally excluded.
+export const TODO_TOOLS = ['TaskCreate', 'TaskUpdate'] as const;
 
 export const LEGACY_TODO_TOOLS = ['TodoWrite'] as const;
 
