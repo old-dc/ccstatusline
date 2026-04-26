@@ -33,6 +33,11 @@ import {
     getSpeedMetricsCollection,
     getTokenMetrics
 } from './utils/jsonl';
+import {
+    getNotificationFilePath,
+    loadNotificationEvents,
+    type NotificationEvent
+} from './utils/notification';
 import { advanceGlobalPowerlineThemeIndex } from './utils/powerline-theme-index';
 import {
     calculateMaxWidthsFromPreRendered,
@@ -193,6 +198,12 @@ async function renderMultipleLines(data: StatusJSON) {
         todoProgressMetrics = getTodoProgressMetrics(data.session_id);
     }
 
+    const hasNeedsAttention = lines.some(line => line.some(item => item.type === 'needs-attention'));
+    let notificationEvents: NotificationEvent[] | null = null;
+    if (hasNeedsAttention && data.session_id) {
+        notificationEvents = loadNotificationEvents(data.session_id);
+    }
+
     // Create render context
     const context: RenderContext = {
         data,
@@ -205,6 +216,7 @@ async function renderMultipleLines(data: StatusJSON) {
         toolCountMetrics,
         agentActivityMetrics,
         todoProgressMetrics,
+        notificationEvents,
         isPreview: false,
         minimalist: settings.minimalistMode
     };
@@ -320,6 +332,9 @@ interface HookInput {
     // persist it alongside the PreToolUse start for FIFO pairing on read.
     agent_id?: string;
     agent_type?: string;
+    // Notification event payload (permission_prompt | idle_prompt | ...).
+    notification_type?: string;
+    message?: string;
 }
 
 async function handleHook(): Promise<void> {
@@ -480,6 +495,24 @@ async function handleHook(): Promise<void> {
                 agent_id: data.agent_id
             });
             fs.appendFileSync(agentPath, entry + '\n');
+        }
+
+        // Needs Attention — log permission_prompt / idle_prompt notifications
+        // so the NeedsAttention widget can highlight when Claude is waiting.
+        // Other notification_types (auth_success / elicitation_dialog / ...)
+        // are intentionally ignored.
+        if (data.hook_event_name === 'Notification'
+            && (data.notification_type === 'permission_prompt'
+                || data.notification_type === 'idle_prompt')) {
+            const notificationPath = getNotificationFilePath(sessionId);
+            fs.mkdirSync(path.dirname(notificationPath), { recursive: true });
+            const entry = JSON.stringify({
+                timestamp: new Date().toISOString(),
+                session_id: sessionId,
+                notification_type: data.notification_type,
+                message: typeof data.message === 'string' ? data.message : undefined
+            });
+            fs.appendFileSync(notificationPath, entry + '\n');
         }
 
         // Todo Progress — write a full-snapshot jsonl line on any todo tool.
