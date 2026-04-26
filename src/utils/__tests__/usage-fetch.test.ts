@@ -219,6 +219,10 @@ function parseLockContents(lockContents: string | null): { blockedUntil: number;
     return lockContents ? JSON.parse(lockContents) as { blockedUntil: number; error?: string } : null;
 }
 
+// Each test in this suite spawns multiple subprocesses via execFileSync; on slow
+// or contended hosts the default 5s vitest/bun-test budget is too tight.
+const PROBE_TEST_TIMEOUT_MS = 30000;
+
 describe('fetchUsageData error handling', () => {
     const nowMs = 2200000000000;
     const successResponseBody = JSON.stringify({
@@ -248,7 +252,7 @@ describe('fetchUsageData error handling', () => {
         }
     });
 
-    it('preserves root errors within a process and keeps existing proxy and cache behavior', () => {
+    it('preserves root errors within a process and keeps existing proxy and cache behavior', { timeout: PROBE_TEST_TIMEOUT_MS }, () => {
         const harness = createProbeHarness();
 
         try {
@@ -418,7 +422,7 @@ describe('fetchUsageData error handling', () => {
         }
     });
 
-    it('reuses stale cached data during a numeric Retry-After backoff and retries after expiry', () => {
+    it('reuses stale cached data during a numeric Retry-After backoff and retries after expiry', { timeout: PROBE_TEST_TIMEOUT_MS }, () => {
         const harness = createProbeHarness();
 
         try {
@@ -486,7 +490,7 @@ describe('fetchUsageData error handling', () => {
         }
     });
 
-    it('returns rate-limited without stale cache and falls back to the default backoff when Retry-After is invalid', () => {
+    it('returns rate-limited without stale cache and falls back to the default backoff when Retry-After is invalid', { timeout: PROBE_TEST_TIMEOUT_MS }, () => {
         const harness = createProbeHarness();
 
         try {
@@ -544,7 +548,7 @@ describe('fetchUsageData error handling', () => {
         }
     });
 
-    it('parses HTTP-date Retry-After headers', () => {
+    it('parses HTTP-date Retry-After headers', { timeout: PROBE_TEST_TIMEOUT_MS }, () => {
         const harness = createProbeHarness();
 
         try {
@@ -572,7 +576,7 @@ describe('fetchUsageData error handling', () => {
         }
     });
 
-    it('supports the legacy empty lock file fallback', () => {
+    it('supports the legacy empty lock file fallback', { timeout: PROBE_TEST_TIMEOUT_MS }, () => {
         const harness = createProbeHarness();
 
         try {
