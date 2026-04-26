@@ -50,6 +50,16 @@ function flushInk() {
     });
 }
 
+async function waitForCondition(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+    const start = Date.now();
+    while (!condition()) {
+        if (Date.now() - start > timeoutMs) {
+            throw new Error(`waitForCondition timed out after ${timeoutMs}ms`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+}
+
 describe('PowerlineThemeSelector helpers', () => {
     afterEach(() => {
         vi.restoreAllMocks();
@@ -139,7 +149,7 @@ describe('PowerlineThemeSelector helpers', () => {
             expect(onUpdate).not.toHaveBeenCalled();
 
             stdin.write('\u001B[B');
-            await flushInk();
+            await waitForCondition(() => onUpdate.mock.calls.length >= 1);
 
             expect(onUpdate).toHaveBeenCalledTimes(1);
             expect(onUpdate.mock.calls[0]?.[0]?.powerline.theme).toBe(themes[1]);

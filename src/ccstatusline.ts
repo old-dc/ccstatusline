@@ -33,6 +33,11 @@ import {
     getSpeedMetricsCollection,
     getTokenMetrics
 } from './utils/jsonl';
+import {
+    classifyNotification,
+    getNotificationFilePath,
+    getNotificationLatest
+} from './utils/notification';
 import { advanceGlobalPowerlineThemeIndex } from './utils/powerline-theme-index';
 import {
     calculateMaxWidthsFromPreRendered,
@@ -193,6 +198,12 @@ async function renderMultipleLines(data: StatusJSON) {
         todoProgressMetrics = getTodoProgressMetrics(data.session_id);
     }
 
+    const hasNeedsAttention = lines.some(line => line.some(item => item.type === 'needs-attention'));
+    let notificationLatest = null;
+    if (hasNeedsAttention && data.session_id) {
+        notificationLatest = getNotificationLatest(data.session_id);
+    }
+
     // Create render context
     const context: RenderContext = {
         data,
@@ -205,6 +216,7 @@ async function renderMultipleLines(data: StatusJSON) {
         toolCountMetrics,
         agentActivityMetrics,
         todoProgressMetrics,
+        notificationLatest,
         isPreview: false,
         minimalist: settings.minimalistMode
     };
@@ -320,6 +332,9 @@ interface HookInput {
     // persist it alongside the PreToolUse start for FIFO pairing on read.
     agent_id?: string;
     agent_type?: string;
+    // Notification hook payload
+    notification_type?: string;
+    message?: string;
 }
 
 async function handleHook(): Promise<void> {
@@ -533,6 +548,23 @@ async function handleHook(): Promise<void> {
                 todos: nextTodos
             });
             fs.appendFileSync(todoPath, entry + '\n');
+        }
+
+        // Notification — record permission_prompt / idle_prompt events
+        // for the NeedsAttention widget to surface in the status line.
+        if (data.hook_event_name === 'Notification'
+            && classifyNotification(data.notification_type)) {
+            const notificationPath = getNotificationFilePath(sessionId);
+            fs.mkdirSync(path.dirname(notificationPath), { recursive: true });
+            const entry: Record<string, unknown> = {
+                timestamp: new Date().toISOString(),
+                session_id: sessionId,
+                notification_type: data.notification_type
+            };
+            if (typeof data.message === 'string') {
+                entry.message = data.message;
+            }
+            fs.appendFileSync(notificationPath, JSON.stringify(entry) + '\n');
         }
     } catch { /* ignore parse errors */ }
     console.log('{}');
