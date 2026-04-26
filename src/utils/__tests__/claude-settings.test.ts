@@ -33,6 +33,23 @@ import { initConfigPath } from '../config';
 const ORIGINAL_CLAUDE_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR;
 let testClaudeConfigDir = '';
 
+// Mirrors the platform-aware quoting used by buildCommand in src/utils/claude-settings.ts.
+// Tests resolve their input paths the same way initConfigPath does (via path.resolve),
+// so the expected command line stays correct on both Linux and Windows.
+function expectedConfigArg(rawPath: string): string {
+    const resolved = path.resolve(rawPath);
+    if (process.platform === 'win32') {
+        if (/[\s&()<>|^"]/.test(resolved)) {
+            return `"${resolved.replace(/"/g, '""')}"`;
+        }
+        return resolved;
+    }
+    if (/[\s()[\];&#|'"\\$`]/.test(resolved)) {
+        return `'${resolved.replace(/'/g, '\'\\\'\'')}'`;
+    }
+    return resolved;
+}
+
 function readInstalledCommand(): string {
     const settingsPath = getClaudeSettingsPath();
     const content = fs.readFileSync(settingsPath, 'utf-8');
@@ -138,31 +155,31 @@ describe('buildCommand via installStatusLine', () => {
     it('should append --config with simple path (no quoting needed)', async () => {
         initConfigPath('/tmp/settings.json');
         await installStatusLine(false);
-        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config /tmp/settings.json`);
+        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config ${expectedConfigArg('/tmp/settings.json')}`);
     });
 
     it('should quote path with spaces', async () => {
         initConfigPath('/my path/settings.json');
         await installStatusLine(false);
-        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config '/my path/settings.json'`);
+        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config ${expectedConfigArg('/my path/settings.json')}`);
     });
 
     it('should quote path with parentheses', async () => {
         initConfigPath('/my(path)/settings.json');
         await installStatusLine(false);
-        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config '/my(path)/settings.json'`);
+        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config ${expectedConfigArg('/my(path)/settings.json')}`);
     });
 
     it('should escape embedded single quotes in path', async () => {
         initConfigPath('/my\'path/settings.json');
         await installStatusLine(false);
-        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config '/my'\\''path/settings.json'`);
+        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.NPM} --config ${expectedConfigArg('/my\'path/settings.json')}`);
     });
 
     it('should use bunx command when useBunx is true', async () => {
         initConfigPath('/my path/settings.json');
         await installStatusLine(true);
-        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.BUNX} --config '/my path/settings.json'`);
+        expect(readInstalledCommand()).toBe(`${CCSTATUSLINE_COMMANDS.BUNX} --config ${expectedConfigArg('/my path/settings.json')}`);
     });
 
     it('should sync hooks on install when settings include hook-enabled widgets', async () => {
