@@ -60,3 +60,4 @@ export { GitWorktreeBranchWidget } from './GitWorktreeBranch';
 export { GitWorktreeOriginalBranchWidget } from './GitWorktreeOriginalBranch';
 export { AgentActivityWidget } from './AgentActivity';
 export { TodoProgressWidget } from './TodoProgress';
+export { NeedsAttentionWidget } from './NeedsAttention';

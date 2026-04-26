@@ -33,6 +33,12 @@ import {
     getSpeedMetricsCollection,
     getTokenMetrics
 } from './utils/jsonl';
+import type { NotificationEntry } from './utils/notification';
+import {
+    getNotificationFilePath,
+    parseNotificationKind,
+    readNotificationEntries
+} from './utils/notification';
 import { advanceGlobalPowerlineThemeIndex } from './utils/powerline-theme-index';
 import {
     calculateMaxWidthsFromPreRendered,
@@ -193,6 +199,12 @@ async function renderMultipleLines(data: StatusJSON) {
         todoProgressMetrics = getTodoProgressMetrics(data.session_id);
     }
 
+    const hasNeedsAttention = lines.some(line => line.some(item => item.type === 'needs-attention'));
+    let notificationEntries: NotificationEntry[] | null = null;
+    if (hasNeedsAttention && data.session_id) {
+        notificationEntries = readNotificationEntries(data.session_id);
+    }
+
     // Create render context
     const context: RenderContext = {
         data,
@@ -205,6 +217,7 @@ async function renderMultipleLines(data: StatusJSON) {
         toolCountMetrics,
         agentActivityMetrics,
         todoProgressMetrics,
+        notificationEntries,
         isPreview: false,
         minimalist: settings.minimalistMode
     };
@@ -320,6 +333,11 @@ interface HookInput {
     // persist it alongside the PreToolUse start for FIFO pairing on read.
     agent_id?: string;
     agent_type?: string;
+    // Notification payload (8.11): observability event for permission_prompt /
+    // idle_prompt etc. Stored verbatim so a future widget can match additional
+    // notification_type values without changing the writer.
+    notification_type?: string;
+    message?: string;
 }
 
 async function handleHook(): Promise<void> {
@@ -533,6 +551,27 @@ async function handleHook(): Promise<void> {
                 todos: nextTodos
             });
             fs.appendFileSync(todoPath, entry + '\n');
+        }
+
+        // NeedsAttention — record permission_prompt / idle_prompt notifications.
+        // notification_type is required: an unknown or missing kind drops the
+        // event silently so older Claude Code builds (auth_success, etc.) do
+        // not pollute the jsonl that the widget reads.
+        if (data.hook_event_name === 'Notification') {
+            const kind = parseNotificationKind(data.notification_type);
+            if (kind) {
+                const notificationPath = getNotificationFilePath(sessionId);
+                fs.mkdirSync(path.dirname(notificationPath), { recursive: true });
+                const record: Record<string, unknown> = {
+                    timestamp: new Date().toISOString(),
+                    session_id: sessionId,
+                    notification_type: data.notification_type
+                };
+                if (typeof data.message === 'string' && data.message.length > 0) {
+                    record.message = data.message;
+                }
+                fs.appendFileSync(notificationPath, JSON.stringify(record) + '\n');
+            }
         }
     } catch { /* ignore parse errors */ }
     console.log('{}');
