@@ -59,6 +59,18 @@ function flushInk() {
     });
 }
 
+async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+    const start = Date.now();
+    while (!predicate()) {
+        if (Date.now() - start > timeoutMs) {
+            throw new Error('Timed out waiting for condition');
+        }
+        await new Promise((resolve) => {
+            setTimeout(resolve, 5);
+        });
+    }
+}
+
 describe('validateRefreshIntervalInput', () => {
     it('should accept empty string (remove interval)', () => {
         expect(validateRefreshIntervalInput('')).toBeNull();
@@ -139,13 +151,13 @@ describe('RefreshIntervalMenu', () => {
         try {
             await flushInk();
             stdin.write('\r');
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('Enter refresh interval in seconds (1-60):'));
 
             expect(stdout.getOutput()).toContain('Enter refresh interval in seconds (1-60):');
             expect(stdout.getOutput()).not.toContain('10s');
 
             stdin.write('\r');
-            await flushInk();
+            await waitFor(() => onUpdate.mock.calls.length >= 1);
 
             expect(onUpdate).toHaveBeenCalledWith(null);
         } finally {
