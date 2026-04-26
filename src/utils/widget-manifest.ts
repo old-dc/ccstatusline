@@ -73,6 +73,7 @@ export const WIDGET_MANIFEST: WidgetManifestEntry[] = [
     { type: 'tool-count', create: () => new widgets.ToolCountWidget() },
     { type: 'agent-activity', create: () => new widgets.AgentActivityWidget() },
     { type: 'todo-progress', create: () => new widgets.TodoProgressWidget() },
+    { type: 'needs-attention', create: () => new widgets.NeedsAttentionWidget() },
     { type: 'thinking-effort', create: () => new widgets.ThinkingEffortWidget() },
     { type: 'vim-mode', create: () => new widgets.VimModeWidget() },
     { type: 'worktree-mode', create: () => new widgets.GitWorktreeModeWidget() },

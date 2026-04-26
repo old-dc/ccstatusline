@@ -5,6 +5,7 @@ import type {
 } from '../types';
 
 import type { AgentActivityMetrics } from './AgentActivityMetrics';
+import type { NotificationEntry } from './NotificationState';
 import type { SpeedMetrics } from './SpeedMetrics';
 import type { StatusJSON } from './StatusJSON';
 import type { TodoProgressMetrics } from './TodoProgressMetrics';
@@ -34,6 +35,7 @@ export interface RenderContext {
     toolCountMetrics?: ToolCountMetrics | null;
     agentActivityMetrics?: AgentActivityMetrics | null;
     todoProgressMetrics?: TodoProgressMetrics | null;
+    notificationEntries?: NotificationEntry[] | null;
     terminalWidth?: number | null;
     isPreview?: boolean;
     minimalist?: boolean;

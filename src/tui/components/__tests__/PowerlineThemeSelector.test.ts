@@ -50,6 +50,16 @@ function flushInk() {
     });
 }
 
+async function waitFor(predicate: () => boolean, timeoutMs = 1000, intervalMs = 10): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate()) {
+        if (Date.now() > deadline) {
+            return;
+        }
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+}
+
 describe('PowerlineThemeSelector helpers', () => {
     afterEach(() => {
         vi.restoreAllMocks();
@@ -139,7 +149,7 @@ describe('PowerlineThemeSelector helpers', () => {
             expect(onUpdate).not.toHaveBeenCalled();
 
             stdin.write('\u001B[B');
-            await flushInk();
+            await waitFor(() => onUpdate.mock.calls.length >= 1);
 
             expect(onUpdate).toHaveBeenCalledTimes(1);
             expect(onUpdate.mock.calls[0]?.[0]?.powerline.theme).toBe(themes[1]);

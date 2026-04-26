@@ -120,6 +120,15 @@ describe('widget catalog', () => {
         expect(isKnownWidgetType('flex-separator')).toBe(true);
         expect(isKnownWidgetType('unknown-widget-type')).toBe(false);
     });
+
+    it('lists needs-attention in the Session catalog with the expected display name', () => {
+        const catalog = getWidgetCatalog(baseSettings);
+        const entry = catalog.find(e => e.type === 'needs-attention');
+        expect(entry).toBeDefined();
+        expect(entry?.category).toBe('Session');
+        expect(entry?.displayName).toBe('Needs Attention');
+        expect(isKnownWidgetType('needs-attention')).toBe(true);
+    });
 });
 
 describe('legacy widget type aliases', () => {
