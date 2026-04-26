@@ -550,7 +550,6 @@ async function handleHook(): Promise<void> {
             fs.appendFileSync(todoPath, entry + '\n');
         }
     } catch { /* ignore parse errors */ }
-    console.log('{}');
 }
 
 async function main() {
