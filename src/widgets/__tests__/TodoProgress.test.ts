@@ -9,6 +9,10 @@ import type { Settings } from '../../types/Settings';
 import type { TodoItem } from '../../types/TodoProgressMetrics';
 import type { WidgetItem } from '../../types/Widget';
 import {
+    LEGACY_TODO_TOOLS,
+    TODO_TOOLS
+} from '../../utils/tool-names';
+import {
     TodoProgressWidget,
     formatTodoProgress,
     formatTodoStatus
@@ -332,5 +336,38 @@ describe('TodoProgressWidget', () => {
         };
         const item = makeItem({ metadata: { staleMinutes: '0' } });
         expect(widget.render(item, ctx, settings)).toBe('▸ Old but not stale (0/1)');
+    });
+});
+
+describe('TodoProgressWidget — hook / TODO_TOOLS consistency', () => {
+    // Invariant: every name in TODO_TOOLS must have a matching PostToolUse
+    // hook in TodoProgress.getHooks(). A name in the set without a hook
+    // means handleHook will never see that tool — which previously was the
+    // case for TaskList. Catching that drift here keeps the two definitions
+    // from silently diverging again.
+    it('every TODO_TOOLS entry is registered as a PostToolUse hook', () => {
+        const widget = new TodoProgressWidget();
+        const postToolMatchers = widget.getHooks()
+            .filter(h => h.event === 'PostToolUse' && typeof h.matcher === 'string')
+            .map(h => h.matcher);
+
+        for (const name of TODO_TOOLS) {
+            expect(postToolMatchers).toContain(name);
+        }
+    });
+
+    it('every PostToolUse matcher points at a known todo tool', () => {
+        const widget = new TodoProgressWidget();
+        const knownNames = new Set<string>([...TODO_TOOLS, ...LEGACY_TODO_TOOLS]);
+
+        for (const hook of widget.getHooks()) {
+            if (hook.event !== 'PostToolUse') {
+                continue;
+            }
+            expect(hook.matcher, 'PostToolUse hook should always carry a matcher').toBeDefined();
+            if (typeof hook.matcher === 'string') {
+                expect(knownNames.has(hook.matcher)).toBe(true);
+            }
+        }
     });
 });
