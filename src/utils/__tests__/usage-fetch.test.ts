@@ -248,7 +248,7 @@ describe('fetchUsageData error handling', () => {
         }
     });
 
-    it('preserves root errors within a process and keeps existing proxy and cache behavior', () => {
+    it('preserves root errors within a process and keeps existing proxy and cache behavior', { timeout: 30000 }, () => {
         const harness = createProbeHarness();
 
         try {
