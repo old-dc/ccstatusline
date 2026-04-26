@@ -86,13 +86,16 @@ export class ToolCountWidget implements Widget {
     supportsRawValue(): boolean { return true; }
     supportsColors(): boolean { return true; }
 
-    // PreToolUse drives current/count/list; PostToolUse adds end events that pair
-    // with start events to power `activity` mode's running/completed distinction.
+    // PreToolUse drives current/count/list; PostToolUse + PostToolUseFailure
+    // add end events that pair with start events to power `activity` mode's
+    // running/completed distinction. Without PostToolUseFailure, failed
+    // tools stay marked running until the next turn boundary.
     // Shared/deduped with Skills' PreToolUse hook; handleHook routes by tool_name.
     getHooks(): WidgetHookDef[] {
         return [
             { event: 'PreToolUse' },
-            { event: 'PostToolUse' }
+            { event: 'PostToolUse' },
+            { event: 'PostToolUseFailure' }
         ];
     }
 

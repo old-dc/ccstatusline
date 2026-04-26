@@ -328,6 +328,11 @@ interface HookInput {
     };
     tool_response?: unknown;
     prompt?: string;
+    // PostToolUseFailure payload (docs §8.7). We only persist whether the
+    // tool failed; error / duration are kept in the type for forward use.
+    error?: string;
+    is_interrupt?: boolean;
+    duration_ms?: number;
     // SubagentStart / SubagentStop payload. Present only for those events;
     // the dispatcher uses agent_id (not tool_use_id) as its identity, so we
     // persist it alongside the PreToolUse start for FIFO pairing on read.
@@ -421,23 +426,33 @@ async function handleHook(): Promise<void> {
             fs.appendFileSync(toolCountPath, JSON.stringify(record) + '\n');
         }
 
-        // Tool Count — end event (paired with PreToolUse start; enables `activity` mode)
-        if (data.hook_event_name === 'PostToolUse'
+        // Tool Count — end event (paired with PreToolUse start; enables `activity` mode).
+        // PostToolUse fires only on success; PostToolUseFailure fires on
+        // exceptions / timeouts / interrupts. Treating both as end records
+        // is what releases failed tools from the running list — without
+        // PostToolUseFailure, `activity` would show them as running until
+        // the next turn marker.
+        const isToolEnd = data.hook_event_name === 'PostToolUse'
+            || data.hook_event_name === 'PostToolUseFailure';
+        if (isToolEnd
             && data.tool_name
             && !isSkillTool(data.tool_name)
             && typeof data.tool_use_id === 'string'
             && data.tool_use_id.length > 0) {
             const toolCountPath = getToolCountFilePath(sessionId);
             fs.mkdirSync(path.dirname(toolCountPath), { recursive: true });
-            const entry = JSON.stringify({
+            const record: Record<string, unknown> = {
                 timestamp: new Date().toISOString(),
                 session_id: sessionId,
                 tool_name: data.tool_name,
                 category: classifyTool(data.tool_name),
                 event: 'end',
                 tool_use_id: data.tool_use_id
-            });
-            fs.appendFileSync(toolCountPath, entry + '\n');
+            };
+            if (data.hook_event_name === 'PostToolUseFailure') {
+                record.failure = true;
+            }
+            fs.appendFileSync(toolCountPath, JSON.stringify(record) + '\n');
         }
 
         // Agent Activity — start event (Agent subagent began)

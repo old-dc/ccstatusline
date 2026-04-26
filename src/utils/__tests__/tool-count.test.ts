@@ -102,6 +102,38 @@ describe('tool-count', () => {
             expect(metrics.activity[0]?.startTime.toISOString()).toBe('2026-04-19T10:00:00.000Z');
         });
 
+        it('marks PostToolUseFailure-derived end rows as completed (failure flag preserved on disk)', () => {
+            // PostToolUseFailure feeds the same end branch as PostToolUse, but
+            // tags the JSONL row with failure: true. The reader treats it as
+            // a regular end (status: 'completed') — the flag is reserved for
+            // future fail-aware rendering. Without this path, failed tools
+            // remain status: 'running' until the next turn marker.
+            writeLines('s-fail', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-fail',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'u-fail'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:02.000Z',
+                    session_id: 's-fail',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'end',
+                    tool_use_id: 'u-fail',
+                    failure: true
+                }
+            ]);
+
+            const metrics = getToolCountMetrics('s-fail');
+            expect(metrics.activity).toHaveLength(1);
+            expect(metrics.activity[0]?.status).toBe('completed');
+            expect(metrics.activity[0]?.endTime?.toISOString()).toBe('2026-04-19T10:00:02.000Z');
+        });
+
         it('marks paired start/end rows as completed', () => {
             writeLines('s-pair', [
                 {
