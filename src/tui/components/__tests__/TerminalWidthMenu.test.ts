@@ -62,10 +62,16 @@ function createMockStdout(): CapturedWriteStream {
     });
 }
 
-function flushInk() {
-    return new Promise((resolve) => {
-        setTimeout(resolve, 25);
-    });
+async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+    const start = Date.now();
+    while (!predicate()) {
+        if (Date.now() - start > timeoutMs) {
+            throw new Error('Timed out waiting for condition');
+        }
+        await new Promise((resolve) => {
+            setTimeout(resolve, 5);
+        });
+    }
 }
 
 describe('TerminalWidthMenu helpers', () => {
@@ -117,7 +123,7 @@ describe('TerminalWidthMenu helpers', () => {
             React.createElement(TerminalWidthMenu, {
                 settings: {
                     ...DEFAULT_SETTINGS,
-                    flexMode: 'full',
+                    flexMode: 'full-minus-40',
                     compactThreshold: 60
                 },
                 onUpdate,
@@ -133,21 +139,29 @@ describe('TerminalWidthMenu helpers', () => {
             }
         );
 
+        async function pause() {
+            await new Promise((resolve) => {
+                setTimeout(resolve, 30);
+            });
+        }
+
         try {
-            await flushInk();
-            stdin.write('\u001B[B');
-            await flushInk();
-            stdin.write('\u001B[B');
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('▶  Full width minus 40'));
+            await pause();
+            stdin.write('[B');
+            await waitFor(() => stdout.getOutput().includes('▶  Full width until compact'));
+            await pause();
             stdin.write('\r');
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('Enter compact threshold (1-99):'));
 
             expect(stdout.getOutput()).toContain('Enter compact threshold (1-99):');
 
             stdout.clearOutput();
+            await pause();
 
             stdin.write('\r');
-            await flushInk();
+            await waitFor(() => onUpdate.mock.calls.length >= 1);
+            await waitFor(() => stdout.getOutput().includes('▶  Full width until compact'));
 
             expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({
                 flexMode: 'full-until-compact',

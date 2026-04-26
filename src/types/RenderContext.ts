@@ -3,6 +3,7 @@ import type {
     SkillsMetrics,
     ToolCountMetrics
 } from '../types';
+import type { NotificationState } from '../utils/notification';
 
 import type { AgentActivityMetrics } from './AgentActivityMetrics';
 import type { SpeedMetrics } from './SpeedMetrics';
@@ -34,6 +35,7 @@ export interface RenderContext {
     toolCountMetrics?: ToolCountMetrics | null;
     agentActivityMetrics?: AgentActivityMetrics | null;
     todoProgressMetrics?: TodoProgressMetrics | null;
+    notificationState?: NotificationState | null;
     terminalWidth?: number | null;
     isPreview?: boolean;
     minimalist?: boolean;

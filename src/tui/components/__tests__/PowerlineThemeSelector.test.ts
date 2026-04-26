@@ -40,14 +40,39 @@ function createMockStdin(): NodeJS.ReadStream {
     return new MockTtyStream() as unknown as NodeJS.ReadStream;
 }
 
-function createMockStdout(): NodeJS.WriteStream {
-    return new MockTtyStream() as unknown as NodeJS.WriteStream;
+interface CapturedWriteStream extends NodeJS.WriteStream { getOutput: () => string }
+
+function createMockStdout(): CapturedWriteStream {
+    const stream = new MockTtyStream();
+    const chunks: string[] = [];
+
+    stream.on('data', (chunk: Buffer | string) => {
+        chunks.push(chunk.toString());
+    });
+
+    return Object.assign(stream as unknown as NodeJS.WriteStream, {
+        getOutput() {
+            return chunks.join('');
+        }
+    });
 }
 
 function flushInk() {
     return new Promise((resolve) => {
         setTimeout(resolve, 25);
     });
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+    const start = Date.now();
+    while (!predicate()) {
+        if (Date.now() - start > timeoutMs) {
+            throw new Error('Timed out waiting for condition');
+        }
+        await new Promise((resolve) => {
+            setTimeout(resolve, 5);
+        });
+    }
 }
 
 describe('PowerlineThemeSelector helpers', () => {
@@ -135,10 +160,11 @@ describe('PowerlineThemeSelector helpers', () => {
         );
 
         try {
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('Powerline Theme Selection'));
             expect(onUpdate).not.toHaveBeenCalled();
 
             stdin.write('\u001B[B');
+            await waitFor(() => onUpdate.mock.calls.length >= 1);
             await flushInk();
 
             expect(onUpdate).toHaveBeenCalledTimes(1);
