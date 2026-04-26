@@ -37,6 +37,7 @@ describe('terminal utils', () => {
     });
 
     it('returns width from the immediate parent tty when available', () => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         mockExecSync.mockImplementation((command: string) => {
             if (command === `ps -o ppid= -p ${process.pid}`) {
                 return '1234\n';
@@ -62,6 +63,7 @@ describe('terminal utils', () => {
     });
 
     it('walks ancestor processes until it finds a valid tty', () => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         mockExecSync.mockImplementation((command: string) => {
             if (command === `ps -o ppid= -p ${process.pid}`) {
                 return '1234\n';
@@ -90,6 +92,7 @@ describe('terminal utils', () => {
     });
 
     it('falls back to tput cols when ancestor probing fails', () => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         mockExecSync.mockImplementationOnce(() => { throw new Error('ps unavailable'); });
         mockExecSync.mockReturnValueOnce('90\n');
 
@@ -126,6 +129,7 @@ describe('terminal utils', () => {
     });
 
     it('detects availability when an ancestor tty probe succeeds', () => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         mockExecSync.mockImplementation((command: string) => {
             if (command === `ps -o ppid= -p ${process.pid}`) {
                 return '1234\n';
