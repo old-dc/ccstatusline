@@ -50,6 +50,18 @@ function flushInk() {
     });
 }
 
+async function waitFor(predicate: () => boolean, { timeout = 2000, interval = 25 } = {}) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        if (predicate())
+            return;
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+    if (!predicate()) {
+        throw new Error(`waitFor timed out after ${timeout}ms`);
+    }
+}
+
 describe('PowerlineThemeSelector helpers', () => {
     afterEach(() => {
         vi.restoreAllMocks();
@@ -139,6 +151,7 @@ describe('PowerlineThemeSelector helpers', () => {
             expect(onUpdate).not.toHaveBeenCalled();
 
             stdin.write('\u001B[B');
+            await waitFor(() => onUpdate.mock.calls.length >= 1);
             await flushInk();
 
             expect(onUpdate).toHaveBeenCalledTimes(1);

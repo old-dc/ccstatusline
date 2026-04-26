@@ -68,6 +68,18 @@ function flushInk() {
     });
 }
 
+async function waitFor(predicate: () => boolean, { timeout = 2000, interval = 25 } = {}) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        if (predicate())
+            return;
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+    if (!predicate()) {
+        throw new Error(`waitFor timed out after ${timeout}ms`);
+    }
+}
+
 describe('TerminalWidthMenu helpers', () => {
     afterEach(() => {
         vi.restoreAllMocks();
@@ -140,13 +152,14 @@ describe('TerminalWidthMenu helpers', () => {
             stdin.write('\u001B[B');
             await flushInk();
             stdin.write('\r');
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('Enter compact threshold (1-99):'));
 
             expect(stdout.getOutput()).toContain('Enter compact threshold (1-99):');
 
             stdout.clearOutput();
 
             stdin.write('\r');
+            await waitFor(() => onUpdate.mock.calls.length >= 1);
             await flushInk();
 
             expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({
