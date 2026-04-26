@@ -584,6 +584,37 @@ describe('items-editor input handlers', () => {
         expect(updated?.[0]?.metadata?.mode).toBe('count');
     });
 
+    it('opens the idle label editor for NeedsAttention on i', () => {
+        const widgets: WidgetItem[] = [
+            { id: '1', type: 'needs-attention' }
+        ];
+        const setCustomEditorWidget = vi.fn();
+        const openWidgetPicker = vi.fn();
+
+        handleNormalInputMode({
+            input: 'i',
+            key: {},
+            widgets,
+            selectedIndex: 0,
+            separatorChars: ['|', '-'],
+            onBack: vi.fn(),
+            onUpdate: vi.fn(),
+            setSelectedIndex: vi.fn(),
+            setMoveMode: vi.fn(),
+            setShowClearConfirm: vi.fn(),
+            openWidgetPicker,
+            getCustomKeybindsForWidget: (widgetImpl, widget) => widgetImpl.getCustomKeybinds ? widgetImpl.getCustomKeybinds(widget) : [],
+            setCustomEditorWidget
+        });
+
+        expect(openWidgetPicker).not.toHaveBeenCalled();
+        const editorState = setCustomEditorWidget.mock.calls[0]?.[0] as
+            | { action?: string; widget?: WidgetItem }
+            | undefined;
+        expect(editorState?.action).toBe('edit-label-idle');
+        expect(editorState?.widget?.type).toBe('needs-attention');
+    });
+
     it('opens custom editor for skills list limit action', () => {
         const widgets: WidgetItem[] = [
             { id: '1', type: 'skills', metadata: { mode: 'list' } }

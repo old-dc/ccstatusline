@@ -350,6 +350,50 @@ export interface HandleNormalInputModeArgs {
     getUniqueBackgroundColor?: (insertIndex: number) => string | undefined;
 }
 
+function tryDispatchCustomKeybind(
+    input: string,
+    key: InputKey,
+    widgets: WidgetItem[],
+    selectedIndex: number,
+    onUpdate: (widgets: WidgetItem[]) => void,
+    getCustomKeybindsForWidget: (widgetImpl: Widget, widget: WidgetItem) => CustomKeybind[],
+    setCustomEditorWidget: (state: CustomEditorWidgetState | null) => void
+): boolean {
+    if (!input || key.ctrl || widgets.length === 0) {
+        return false;
+    }
+    const currentWidget = widgets[selectedIndex];
+    if (!currentWidget || currentWidget.type === 'separator' || currentWidget.type === 'flex-separator') {
+        return false;
+    }
+    const widgetImpl = getWidget(currentWidget.type);
+    if (!widgetImpl?.getCustomKeybinds) {
+        return false;
+    }
+    const matchedKeybind = getCustomKeybindsForWidget(widgetImpl, currentWidget).find(kb => kb.key === input);
+    if (!matchedKeybind) {
+        return false;
+    }
+    if (widgetImpl.handleEditorAction) {
+        const updatedWidget = widgetImpl.handleEditorAction(matchedKeybind.action, currentWidget);
+        if (updatedWidget) {
+            const newWidgets = [...widgets];
+            newWidgets[selectedIndex] = updatedWidget;
+            onUpdate(newWidgets);
+            return true;
+        }
+        if (widgetImpl.renderEditor) {
+            setCustomEditorWidget({ widget: currentWidget, impl: widgetImpl, action: matchedKeybind.action });
+        }
+        return true;
+    }
+    if (widgetImpl.renderEditor) {
+        setCustomEditorWidget({ widget: currentWidget, impl: widgetImpl, action: matchedKeybind.action });
+        return true;
+    }
+    return false;
+}
+
 export function handleNormalInputMode({
     input,
     key,
@@ -376,6 +420,16 @@ export function handleNormalInputMode({
         openWidgetPicker('change');
     } else if (key.return && widgets.length > 0) {
         setMoveMode(true);
+    } else if (tryDispatchCustomKeybind(
+        input,
+        key,
+        widgets,
+        selectedIndex,
+        onUpdate,
+        getCustomKeybindsForWidget,
+        setCustomEditorWidget
+    )) {
+        // Selected widget consumed the input via a custom keybind.
     } else if (input === 'a') {
         openWidgetPicker('add');
     } else if (input === 'i') {
@@ -457,31 +511,5 @@ export function handleNormalInputMode({
         }
     } else if (key.escape) {
         onBack();
-    } else if (widgets.length > 0) {
-        const currentWidget = widgets[selectedIndex];
-        if (currentWidget && currentWidget.type !== 'separator' && currentWidget.type !== 'flex-separator') {
-            const widgetImpl = getWidget(currentWidget.type);
-            if (!widgetImpl?.getCustomKeybinds) {
-                return;
-            }
-
-            const customKeybinds = getCustomKeybindsForWidget(widgetImpl, currentWidget);
-            const matchedKeybind = customKeybinds.find(kb => kb.key === input);
-
-            if (matchedKeybind && !key.ctrl) {
-                if (widgetImpl.handleEditorAction) {
-                    const updatedWidget = widgetImpl.handleEditorAction(matchedKeybind.action, currentWidget);
-                    if (updatedWidget) {
-                        const newWidgets = [...widgets];
-                        newWidgets[selectedIndex] = updatedWidget;
-                        onUpdate(newWidgets);
-                    } else if (widgetImpl.renderEditor) {
-                        setCustomEditorWidget({ widget: currentWidget, impl: widgetImpl, action: matchedKeybind.action });
-                    }
-                } else if (widgetImpl.renderEditor) {
-                    setCustomEditorWidget({ widget: currentWidget, impl: widgetImpl, action: matchedKeybind.action });
-                }
-            }
-        }
     }
 }
