@@ -40,8 +40,21 @@ function createMockStdin(): NodeJS.ReadStream {
     return new MockTtyStream() as unknown as NodeJS.ReadStream;
 }
 
-function createMockStdout(): NodeJS.WriteStream {
-    return new MockTtyStream() as unknown as NodeJS.WriteStream;
+interface CapturedWriteStream extends NodeJS.WriteStream { getOutput: () => string }
+
+function createMockStdout(): CapturedWriteStream {
+    const stream = new MockTtyStream();
+    const chunks: string[] = [];
+
+    stream.on('data', (chunk: Buffer | string) => {
+        chunks.push(chunk.toString());
+    });
+
+    return Object.assign(stream as unknown as NodeJS.WriteStream, {
+        getOutput() {
+            return chunks.join('');
+        }
+    });
 }
 
 function flushInk() {
@@ -147,7 +160,7 @@ describe('PowerlineThemeSelector helpers', () => {
         );
 
         try {
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('Powerline Theme Selection'));
             expect(onUpdate).not.toHaveBeenCalled();
 
             stdin.write('\u001B[B');

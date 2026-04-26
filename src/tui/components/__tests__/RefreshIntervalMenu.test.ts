@@ -53,12 +53,6 @@ function createMockStdout(): CapturedWriteStream {
     });
 }
 
-function flushInk() {
-    return new Promise((resolve) => {
-        setTimeout(resolve, 25);
-    });
-}
-
 async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
     const start = Date.now();
     while (!predicate()) {
@@ -148,14 +142,22 @@ describe('RefreshIntervalMenu', () => {
             }
         );
 
+        async function pause() {
+            await new Promise((resolve) => {
+                setTimeout(resolve, 30);
+            });
+        }
+
         try {
-            await flushInk();
+            await waitFor(() => stdout.getOutput().includes('🔄 Refresh Interval'));
+            await pause();
             stdin.write('\r');
             await waitFor(() => stdout.getOutput().includes('Enter refresh interval in seconds (1-60):'));
 
             expect(stdout.getOutput()).toContain('Enter refresh interval in seconds (1-60):');
             expect(stdout.getOutput()).not.toContain('10s');
 
+            await pause();
             stdin.write('\r');
             await waitFor(() => onUpdate.mock.calls.length >= 1);
 

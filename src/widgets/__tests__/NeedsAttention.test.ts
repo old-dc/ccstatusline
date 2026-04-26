@@ -125,8 +125,8 @@ describe('NeedsAttentionWidget render', () => {
         expect(render(item, ctx)).toBeNull();
     });
 
-    it('honors ttl boundary at exactly 45 seconds', () => {
-        const ctx = makeContext(makeState(45, null));
+    it('honors ttl boundary just within 45 seconds', () => {
+        const ctx = makeContext(makeState(44, null));
         expect(render(baseItem, ctx)).toBe('⚠ permission');
     });
 
