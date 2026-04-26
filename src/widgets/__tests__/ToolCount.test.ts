@@ -293,3 +293,10 @@ describe('ToolCountWidget — activity mode + hideCompleted', () => {
         )).toBeNull();
     });
 });
+
+describe('ToolCountWidget — hook registration', () => {
+    it('registers PostToolUseFailure so failed tools close their activity entries', () => {
+        const events = widget.getHooks().map(h => h.event);
+        expect(events).toEqual(expect.arrayContaining(['PreToolUse', 'PostToolUse', 'PostToolUseFailure']));
+    });
+});
