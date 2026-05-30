@@ -16,12 +16,18 @@ export interface RenderUsageData {
     sessionResetAt?: string;
     weeklyUsage?: number;
     weeklyResetAt?: string;
+    weeklySonnetUsage?: number;
+    weeklySonnetResetAt?: string;
+    weeklyOpusUsage?: number;
+    weeklyOpusResetAt?: string;
     extraUsageEnabled?: boolean;
     extraUsageLimit?: number;
     extraUsageUsed?: number;
     extraUsageUtilization?: number;
     error?: 'no-credentials' | 'timeout' | 'rate-limited' | 'api-error' | 'parse-error';
 }
+
+export interface CompactionData { count: number }
 
 export interface RenderContext {
     data?: StatusJSON;
@@ -36,9 +42,11 @@ export interface RenderContext {
     agentActivityMetrics?: AgentActivityMetrics | null;
     todoProgressMetrics?: TodoProgressMetrics | null;
     notificationState?: NotificationState | null;
+    compactionData?: CompactionData | null;
     terminalWidth?: number | null;
     isPreview?: boolean;
     minimalist?: boolean;
+    gitCacheTtlSeconds?: number;
     lineIndex?: number;  // Index of the current line being rendered (for theme cycling)
     globalSeparatorIndex?: number;  // Global separator index that continues across lines
 

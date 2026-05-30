@@ -106,14 +106,14 @@ function renderPowerlineStatusLine(
     if (themeName && themeName !== 'custom') {
         const theme = getPowerlineTheme(themeName);
         if (theme) {
-            const colorLevel = getColorLevelString((settings.colorLevel as number) as (0 | 1 | 2 | 3));
+            const colorLevel = getColorLevelString(settings.colorLevel);
             const colorLevelKey = colorLevel === 'ansi16' ? '1' : colorLevel === 'ansi256' ? '2' : '3';
             themeColors = theme[colorLevelKey];
         }
     }
 
     // Get color level from settings
-    const colorLevel = getColorLevelString((settings.colorLevel as number) as (0 | 1 | 2 | 3));
+    const colorLevel = getColorLevelString(settings.colorLevel);
 
     // Filter out separator and flex-separator widgets in powerline mode
     const filteredWidgets = widgets.filter(widget => widget.type !== 'separator' && widget.type !== 'flex-separator'
@@ -635,7 +635,7 @@ export function renderStatusLine(
     // No need to override here
 
     // Get color level from settings
-    const colorLevel = getColorLevelString((settings.colorLevel as number) as (0 | 1 | 2 | 3));
+    const colorLevel = getColorLevelString(settings.colorLevel);
 
     // Check if powerline mode is enabled
     const powerlineSettings = settings.powerline as Record<string, unknown> | undefined;
@@ -680,6 +680,45 @@ export function renderStatusLine(
     const elements: { content: string; type: string; widget?: WidgetItem }[] = [];
     let hasFlexSeparator = false;
 
+    const isSeparatorType = (item: WidgetItem | undefined): boolean => item?.type === 'separator' || item?.type === 'flex-separator';
+
+    const hasRenderedContent = (index: number): boolean => Boolean(preRenderedWidgets[index]?.content);
+
+    const findRenderedContentBefore = (startIndex: number): number | null => {
+        for (let j = startIndex; j >= 0; j--) {
+            const candidate = widgets[j];
+            if (!candidate || isSeparatorType(candidate)) {
+                continue;
+            }
+            if (hasRenderedContent(j)) {
+                return j;
+            }
+        }
+        return null;
+    };
+
+    const findRenderedContentAfter = (startIndex: number): number | null => {
+        for (let j = startIndex; j < widgets.length; j++) {
+            const candidate = widgets[j];
+            if (!candidate || isSeparatorType(candidate)) {
+                continue;
+            }
+            if (hasRenderedContent(j)) {
+                return j;
+            }
+        }
+        return null;
+    };
+
+    const hasLaterSeparatorBeforeContent = (separatorIndex: number, contentIndex: number): boolean => {
+        for (let j = separatorIndex + 1; j < contentIndex; j++) {
+            if (isSeparatorType(widgets[j])) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Build elements based on configured widgets
     for (let i = 0; i < widgets.length; i++) {
         const widget = widgets[i];
@@ -688,43 +727,16 @@ export function renderStatusLine(
 
         // Handle separators specially (they're not widgets)
         if (widget.type === 'separator') {
-            // Check if there's any widget before this separator that actually rendered content
-            // Look backwards to find ANY widget that produced content
-            let hasContentBefore = false;
-            for (let j = i - 1; j >= 0; j--) {
-                const prevWidget = widgets[j];
-                if (prevWidget && prevWidget.type !== 'separator' && prevWidget.type !== 'flex-separator') {
-                    if (preRenderedWidgets[j]?.content) {
-                        hasContentBefore = true;
-                        break;
-                    }
-                    // Continue looking backwards even if this widget didn't render content
-                }
-            }
-            if (!hasContentBefore)
+            const previousContentIndex = findRenderedContentBefore(i - 1);
+            const nextContentIndex = findRenderedContentAfter(i + 1);
+            if (previousContentIndex === null || nextContentIndex === null)
                 continue;
 
-            // Also require that some widget *between this separator and the next*
-            // actually rendered content. Without this check, an empty widget that
-            // sits between two separators (e.g. a hideWhenEmpty widget that is
-            // currently null) leaves "| |" — two separators with nothing between
-            // them. Stop the lookahead at the next separator so we only protect
-            // *this* gap; a later separator gets to make its own decision.
-            let hasContentAfter = false;
-            for (let j = i + 1; j < widgets.length; j++) {
-                const nextWidget = widgets[j];
-                if (!nextWidget) {
-                    continue;
-                }
-                if (nextWidget.type === 'separator' || nextWidget.type === 'flex-separator') {
-                    break;
-                }
-                if (preRenderedWidgets[j]?.content) {
-                    hasContentAfter = true;
-                    break;
-                }
-            }
-            if (!hasContentAfter)
+            const previousContentWidget = widgets[previousContentIndex];
+            if (previousContentWidget?.merge)
+                continue;
+
+            if (hasLaterSeparatorBeforeContent(i, nextContentIndex))
                 continue;
 
             const sepChar = widget.character ?? (settings.defaultSeparator ?? '|');
@@ -737,8 +749,8 @@ export function renderStatusLine(
 
             if (settings.inheritSeparatorColors && i > 0 && !widget.color && !widget.backgroundColor) {
                 // Only inherit if the separator doesn't have explicit colors set
-                const prevWidget = widgets[i - 1];
-                if (prevWidget && prevWidget.type !== 'separator' && prevWidget.type !== 'flex-separator') {
+                const prevWidget = widgets[previousContentIndex];
+                if (prevWidget) {
                     // Get the previous widget's colors
                     let widgetColor = prevWidget.color;
                     if (!widgetColor) {

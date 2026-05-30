@@ -24,10 +24,16 @@ import {
 import { getVisibleText } from './utils/ansi';
 import { updateColorMap } from './utils/colors';
 import {
+    detectCompaction,
+    loadCompactionState,
+    saveCompactionState
+} from './utils/compaction';
+import {
     initConfigPath,
     loadSettings,
     saveSettings
 } from './utils/config';
+import { calculateContextPercentageMetrics } from './utils/context-percentage';
 import {
     getSessionDuration,
     getSpeedMetricsCollection,
@@ -120,7 +126,7 @@ async function ensureWindowsUtf8CodePage() {
 
     try {
         const { execFileSync } = await import('child_process');
-        execFileSync('chcp.com', ['65001'], { stdio: 'ignore' });
+        execFileSync('chcp.com', ['65001'], { stdio: 'ignore', windowsHide: true });
     } catch {
         // Ignore failures to preserve statusline output even in restricted shells.
     }
@@ -205,6 +211,26 @@ async function renderMultipleLines(data: StatusJSON) {
         notificationState = loadNotificationState(data.session_id);
     }
 
+    // Compaction detection — track context percentage drops between renders
+    let compactionCount = 0;
+    const hasCompactionWidget = lines.some(line => line.some(item => item.type === 'compaction-counter'));
+    if (hasCompactionWidget && data.session_id) {
+        const prevState = loadCompactionState(data.session_id);
+        compactionCount = prevState.count;
+        const contextPercentageMetrics = calculateContextPercentageMetrics({ data, tokenMetrics });
+        if (contextPercentageMetrics !== null) {
+            const newState = detectCompaction(contextPercentageMetrics.usedPercentage, prevState, { windowSize: contextPercentageMetrics.windowSize });
+            if (
+                newState.count !== prevState.count
+                || newState.prevCtxPct !== prevState.prevCtxPct
+                || newState.prevWindowSize !== prevState.prevWindowSize
+            ) {
+                saveCompactionState(data.session_id, newState);
+            }
+            compactionCount = newState.count;
+        }
+    }
+
     // Create render context
     const context: RenderContext = {
         data,
@@ -218,8 +244,10 @@ async function renderMultipleLines(data: StatusJSON) {
         agentActivityMetrics,
         todoProgressMetrics,
         notificationState,
+        compactionData: hasCompactionWidget ? { count: compactionCount } : null,
         isPreview: false,
-        minimalist: settings.minimalistMode
+        minimalist: settings.minimalistMode,
+        gitCacheTtlSeconds: settings.gitCacheTtlSeconds
     };
 
     // Always pre-render all widgets once (for efficiency)
@@ -346,14 +374,12 @@ interface HookInput {
 async function handleHook(): Promise<void> {
     const input = await readStdin();
     if (!input) {
-        console.log('{}');
         return;
     }
     try {
         const data = JSON.parse(input) as HookInput;
         const sessionId = data.session_id;
         if (!sessionId) {
-            console.log('{}');
             return;
         }
 

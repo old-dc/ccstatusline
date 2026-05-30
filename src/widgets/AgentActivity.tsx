@@ -154,7 +154,7 @@ export class AgentActivityWidget implements Widget {
 
     getHooks(): WidgetHookDef[] {
         const preToolHooks: WidgetHookDef[] = SUBAGENT_TOOLS.map(tool => (
-            { event: 'PreToolUse', matcher: tool } as WidgetHookDef
+            { event: 'PreToolUse', matcher: tool }
         ));
         return [
             ...preToolHooks,
