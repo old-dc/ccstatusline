@@ -408,11 +408,12 @@ async function handleHook(): Promise<void> {
             fs.appendFileSync(skillsPath, entry + '\n');
         }
 
-        // Turn boundary marker — appended to agent-activity and todo-progress
-        // jsonls on every new user prompt. getAgentActivityMetrics /
-        // getTodoProgressMetrics read the last turn timestamp and purge
-        // completed agents / stale todo snapshots that predate it. Running
-        // agents are always kept; they span turns by definition.
+        // Turn boundary marker — appended to agent-activity, todo-progress,
+        // and tool-count jsonls on every new user prompt. Their readers use
+        // the last turn timestamp to purge stale state from prior turns.
+        // For tool-count specifically this rescues "zombie running" rows
+        // left behind when PostToolUse / PostToolUseFailure never fires —
+        // e.g. PreToolUse hook block, manual permission deny, deny rules.
         if (data.hook_event_name === 'UserPromptSubmit') {
             const turnMarker = JSON.stringify({
                 timestamp: new Date().toISOString(),
@@ -426,6 +427,10 @@ async function handleHook(): Promise<void> {
             const todoPath = getTodoProgressFilePath(sessionId);
             if (fs.existsSync(todoPath)) {
                 fs.appendFileSync(todoPath, turnMarker + '\n');
+            }
+            const toolCountPath = getToolCountFilePath(sessionId);
+            if (fs.existsSync(toolCountPath)) {
+                fs.appendFileSync(toolCountPath, turnMarker + '\n');
             }
         }
 
@@ -452,14 +457,16 @@ async function handleHook(): Promise<void> {
             fs.appendFileSync(toolCountPath, JSON.stringify(record) + '\n');
         }
 
-        // Tool Count — end event (paired with PreToolUse start; enables `activity` mode).
-        // PostToolUse fires only on success; PostToolUseFailure fires on
-        // exceptions / timeouts / interrupts. Treating both as end records
-        // is what releases failed tools from the running list — without
-        // PostToolUseFailure, `activity` would show them as running until
-        // the next turn marker.
+        // Tool Count — end event. Paired with PreToolUse start; enables
+        // `activity` mode's running→completed transition. PostToolUse fires
+        // only on success; PostToolUseFailure fires on exceptions / timeouts /
+        // ESC interrupts (carrying `is_interrupt: true`); PermissionDenied
+        // fires on auto-mode classifier deny. All three carry the same
+        // `tool_use_id` that paired with PreToolUse and release the tool from
+        // the running list; only PostToolUseFailure is marked `failure` below.
         const isToolEnd = data.hook_event_name === 'PostToolUse'
-            || data.hook_event_name === 'PostToolUseFailure';
+            || data.hook_event_name === 'PostToolUseFailure'
+            || data.hook_event_name === 'PermissionDenied';
         if (isToolEnd
             && data.tool_name
             && !isSkillTool(data.tool_name)

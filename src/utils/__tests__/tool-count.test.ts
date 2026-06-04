@@ -232,6 +232,177 @@ describe('tool-count', () => {
         });
     });
 
+    describe('getToolCountMetrics — turn-boundary cleanup for abandoned tools', () => {
+        // When a Bash tool is rejected, interrupted (ESC), or times out,
+        // Claude Code never fires PostToolUse, so no 'end' row is written.
+        // The reader treats a turn marker (appended on UserPromptSubmit) as
+        // proof that the previous conversation turn finished — any start
+        // row before that marker without a matching end is a zombie and
+        // must be purged so the activity view doesn't pile up "◐ Bash ×N".
+        it('drops running entries started before the last turn marker', () => {
+            writeLines('s-zombie', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-zombie',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'u1'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:10.000Z',
+                    session_id: 's-zombie',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'u2'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:30.000Z',
+                    session_id: 's-zombie',
+                    event: 'turn'
+                }
+            ]);
+
+            const metrics = getToolCountMetrics('s-zombie');
+            expect(metrics.activity).toEqual([]);
+            // Count was already incremented at PreToolUse — keep it; the
+            // tools were attempted even if they were never finalized.
+            expect(metrics.totalInvocations).toBe(2);
+        });
+
+        it('keeps running entries started after the last turn marker', () => {
+            writeLines('s-keep-running', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-keep-running',
+                    event: 'turn'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:10.000Z',
+                    session_id: 's-keep-running',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'u-current'
+                }
+            ]);
+
+            const metrics = getToolCountMetrics('s-keep-running');
+            expect(metrics.activity).toHaveLength(1);
+            expect(metrics.activity[0]?.id).toBe('u-current');
+            expect(metrics.activity[0]?.status).toBe('running');
+        });
+
+        it('preserves completed entries regardless of turn boundary', () => {
+            writeLines('s-completed', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-completed',
+                    tool_name: 'Read',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'u1'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:05.000Z',
+                    session_id: 's-completed',
+                    tool_name: 'Read',
+                    category: 'builtin',
+                    event: 'end',
+                    tool_use_id: 'u1'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:30.000Z',
+                    session_id: 's-completed',
+                    event: 'turn'
+                }
+            ]);
+
+            const metrics = getToolCountMetrics('s-completed');
+            expect(metrics.activity).toHaveLength(1);
+            expect(metrics.activity[0]?.status).toBe('completed');
+        });
+
+        it('mixes zombies before boundary and fresh runners after', () => {
+            writeLines('s-mixed', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-mixed',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'zombie-1'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:05.000Z',
+                    session_id: 's-mixed',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'zombie-2'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:10.000Z',
+                    session_id: 's-mixed',
+                    tool_name: 'Edit',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'done-1'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:11.000Z',
+                    session_id: 's-mixed',
+                    tool_name: 'Edit',
+                    category: 'builtin',
+                    event: 'end',
+                    tool_use_id: 'done-1'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:20.000Z',
+                    session_id: 's-mixed',
+                    event: 'turn'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:25.000Z',
+                    session_id: 's-mixed',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'fresh-1'
+                }
+            ]);
+
+            const metrics = getToolCountMetrics('s-mixed');
+            const ids = metrics.activity.map(a => a.id);
+            expect(ids).toEqual(['done-1', 'fresh-1']);
+            expect(metrics.activity.find(a => a.id === 'fresh-1')?.status).toBe('running');
+            expect(metrics.activity.find(a => a.id === 'done-1')?.status).toBe('completed');
+        });
+
+        it('ignores turn markers from other sessions', () => {
+            writeLines('s-iso', [
+                {
+                    timestamp: '2026-04-19T10:00:00.000Z',
+                    session_id: 's-iso',
+                    tool_name: 'Bash',
+                    category: 'builtin',
+                    event: 'start',
+                    tool_use_id: 'u-mine'
+                },
+                {
+                    timestamp: '2026-04-19T10:00:30.000Z',
+                    session_id: 's-other',
+                    event: 'turn'
+                }
+            ]);
+
+            const metrics = getToolCountMetrics('s-iso');
+            expect(metrics.activity).toHaveLength(1);
+            expect(metrics.activity[0]?.status).toBe('running');
+        });
+    });
+
     describe('extractTarget', () => {
         it('extracts file_path for editor tools', () => {
             expect(extractTarget('Edit', { file_path: '/a.ts' })).toBe('/a.ts');

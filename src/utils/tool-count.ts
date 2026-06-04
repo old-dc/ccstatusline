@@ -79,6 +79,30 @@ export function basename(target: string): string {
     return last !== undefined && last.length > 0 ? last : target;
 }
 
+// UserPromptSubmit appends `{event: 'turn'}` rows to the jsonl as a
+// conversation-turn boundary. Their timestamp is the ceiling for any
+// still-running start whose matching end never arrived — PreToolUse
+// hook block, manual permission deny, and deny rules don't fire any
+// of PostToolUse / PostToolUseFailure / PermissionDenied, so those
+// rows would otherwise accumulate forever as `◐ Bash ×N`.
+function extractTurnTimestamp(line: string, sessionId: string): string | null {
+    try {
+        const parsed: unknown = JSON.parse(line);
+        if (typeof parsed !== 'object' || parsed === null)
+            return null;
+        const record = parsed as Record<string, unknown>;
+        if (record.event !== 'turn')
+            return null;
+        if (record.session_id !== sessionId)
+            return null;
+        if (typeof record.timestamp !== 'string')
+            return null;
+        return record.timestamp;
+    } catch {
+        return null;
+    }
+}
+
 function parseInvocation(line: string, sessionId: string): ToolInvocation | null {
     try {
         const parsed: unknown = JSON.parse(line);
@@ -129,8 +153,17 @@ export function getToolCountMetrics(sessionId: string): ToolCountMetrics {
         const activityMap = new Map<string, ToolActivityEntry>();
         let lastTool: string | null = null;
         let totalInvocations = 0;
+        let lastTurnMs = 0;
 
         for (const line of lines) {
+            const turnTs = extractTurnTimestamp(line, sessionId);
+            if (turnTs !== null) {
+                const ms = new Date(turnTs).getTime();
+                if (!Number.isNaN(ms) && ms > lastTurnMs) {
+                    lastTurnMs = ms;
+                }
+                continue;
+            }
             const inv = parseInvocation(line, sessionId);
             if (!inv)
                 continue;
@@ -163,7 +196,20 @@ export function getToolCountMetrics(sessionId: string): ToolCountMetrics {
             }
         }
 
+        // Turn-boundary purge: a running row started before the latest
+        // turn marker is a zombie — the prior turn is definitively over,
+        // so any matching end signal that was going to arrive already did.
+        // Completed rows are always kept regardless of turn boundary; they
+        // still power `count` / `list` views and the top-N completed list
+        // in activity mode.
         const activity = Array.from(activityMap.values())
+            .filter((a) => {
+                if (a.status === 'completed')
+                    return true;
+                if (lastTurnMs === 0)
+                    return true;
+                return a.startTime.getTime() >= lastTurnMs;
+            })
             .sort((a, b) => {
                 const delta = a.startTime.getTime() - b.startTime.getTime();
                 if (delta !== 0)
