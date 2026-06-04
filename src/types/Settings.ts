@@ -4,6 +4,7 @@ import { ColorLevelSchema } from './ColorLevel';
 import { FlexModeSchema } from './FlexMode';
 import { PowerlineConfigSchema } from './PowerlineConfig';
 import { WidgetItemSchema } from './Widget';
+import { DEFAULT_LINES } from './default-lines';
 
 // Current version - bump this when making breaking changes to the schema
 export const CURRENT_VERSION = 3;
@@ -46,20 +47,8 @@ export const SettingsSchema = z.object({
     version: z.number().default(CURRENT_VERSION),
     lines: z.array(z.array(WidgetItemSchema))
         .min(1)
-        .default([
-            [
-                { id: '1', type: 'model', color: 'cyan' },
-                { id: '2', type: 'separator' },
-                { id: '3', type: 'context-length', color: 'brightBlack' },
-                { id: '4', type: 'separator' },
-                { id: '5', type: 'git-branch', color: 'magenta' },
-                { id: '6', type: 'separator' },
-                { id: '7', type: 'git-changes', color: 'yellow' }
-            ],
-            [],
-            []
-        ]), // Ensure max 3 lines
-    flexMode: FlexModeSchema.default('full-minus-40'),
+        .default(DEFAULT_LINES),
+    flexMode: FlexModeSchema.default('full'),
     compactThreshold: z.number().min(1).max(99).default(60),
     colorLevel: ColorLevelSchema.default(2),
     defaultSeparator: z.string().optional(),
