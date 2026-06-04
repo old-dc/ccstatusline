@@ -86,16 +86,21 @@ export class ToolCountWidget implements Widget {
     supportsRawValue(): boolean { return true; }
     supportsColors(): boolean { return true; }
 
-    // PreToolUse drives current/count/list; PostToolUse + PostToolUseFailure
-    // add end events that pair with start events to power `activity` mode's
-    // running/completed distinction. Without PostToolUseFailure, failed
-    // tools stay marked running until the next turn boundary.
-    // Shared/deduped with Skills' PreToolUse hook; handleHook routes by tool_name.
+    // PreToolUse drives current/count/list. The three end-signal events
+    // (PostToolUse on success, PostToolUseFailure on error/interrupt,
+    // PermissionDenied on auto-mode deny) all carry tool_use_id and are
+    // paired with the PreToolUse start to power `activity` mode's
+    // running/completed distinction. UserPromptSubmit writes a turn marker
+    // as a fallback boundary for "zombie running" rows left behind when
+    // none of the end events fire (e.g. PreToolUse hook block, manual
+    // deny, deny rule). Shared/deduped with Skills' hooks.
     getHooks(): WidgetHookDef[] {
         return [
             { event: 'PreToolUse' },
             { event: 'PostToolUse' },
-            { event: 'PostToolUseFailure' }
+            { event: 'PostToolUseFailure' },
+            { event: 'PermissionDenied' },
+            { event: 'UserPromptSubmit' }
         ];
     }
 
