@@ -110,7 +110,7 @@ describe('git utils', () => {
     });
 
     describe('resolveGitCwd', () => {
-        it('prefers context.data.cwd when available', () => {
+        it('prefers workspace.project_dir so git info stays pinned to the launch directory', () => {
             const context: RenderContext = {
                 data: {
                     cwd: '/repo/from/cwd',
@@ -121,40 +121,38 @@ describe('git utils', () => {
                 }
             };
 
+            expect(resolveGitCwd(context)).toBe('/repo/from/project-dir');
+        });
+
+        it('falls back to context.data.cwd', () => {
+            const context: RenderContext = {
+                data: {
+                    cwd: '/repo/from/cwd',
+                    workspace: { current_dir: '/repo/from/current-dir' }
+                }
+            };
+
             expect(resolveGitCwd(context)).toBe('/repo/from/cwd');
         });
 
         it('falls back to workspace.current_dir', () => {
-            const context: RenderContext = {
-                data: {
-                    workspace: {
-                        current_dir: '/repo/from/current-dir',
-                        project_dir: '/repo/from/project-dir'
-                    }
-                }
-            };
+            const context: RenderContext = { data: { workspace: { current_dir: '/repo/from/current-dir' } } };
 
             expect(resolveGitCwd(context)).toBe('/repo/from/current-dir');
-        });
-
-        it('falls back to workspace.project_dir', () => {
-            const context: RenderContext = { data: { workspace: { project_dir: '/repo/from/project-dir' } } };
-
-            expect(resolveGitCwd(context)).toBe('/repo/from/project-dir');
         });
 
         it('skips empty candidate values', () => {
             const context: RenderContext = {
                 data: {
-                    cwd: '   ',
+                    cwd: '',
                     workspace: {
-                        current_dir: '',
-                        project_dir: '/repo/from/project-dir'
+                        current_dir: '/repo/from/current-dir',
+                        project_dir: '   '
                     }
                 }
             };
 
-            expect(resolveGitCwd(context)).toBe('/repo/from/project-dir');
+            expect(resolveGitCwd(context)).toBe('/repo/from/current-dir');
         });
 
         it('returns undefined when no candidates are available', () => {

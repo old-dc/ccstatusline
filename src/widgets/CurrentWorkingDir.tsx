@@ -135,7 +135,8 @@ export class CurrentWorkingDirWidget implements Widget {
             return item.rawValue ? previewPath : `cwd: ${previewPath}`;
         }
 
-        const cwd = context.data?.cwd;
+        // Pin to the launch directory: cwd drifts mid-session when a skill or subtask cd's away
+        const cwd = context.data?.workspace?.project_dir ?? context.data?.cwd;
         if (!cwd)
             return null;
 

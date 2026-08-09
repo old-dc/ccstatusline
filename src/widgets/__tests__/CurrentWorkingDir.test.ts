@@ -65,6 +65,28 @@ describe('CurrentWorkingDirWidget', () => {
         metadata
     });
 
+    describe('launch directory pinning', () => {
+        it('should prefer workspace.project_dir over a drifted cwd', () => {
+            const item = createItem(undefined, true);
+            const context: RenderContext = {
+                data: {
+                    cwd: '/Users/alice/.claude/skills/agent-reach',
+                    workspace: {
+                        current_dir: '/Users/alice/.claude/skills/agent-reach',
+                        project_dir: '/Users/alice/Projects/agent'
+                    }
+                }
+            };
+            expect(widget.render(item, context, defaultSettings)).toBe('/Users/alice/Projects/agent');
+        });
+
+        it('should fall back to cwd when project_dir is absent', () => {
+            const item = createItem(undefined, true);
+            const result = widget.render(item, createContext('/Users/alice/Projects/agent'), defaultSettings);
+            expect(result).toBe('/Users/alice/Projects/agent');
+        });
+    });
+
     describe('abbreviateHome', () => {
         it('should replace home directory with ~ when enabled', () => {
             mockHomedir.mockReturnValue(defaultHomeDir);

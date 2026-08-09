@@ -278,10 +278,11 @@ function createCacheEntry(output: string | null, metadata: GitRepoMetadata | nul
 }
 
 export function resolveGitCwd(context: RenderContext): string | undefined {
+    // project_dir first so git info stays on the launch directory, matching CurrentWorkingDir
     const candidates = [
+        context.data?.workspace?.project_dir,
         context.data?.cwd,
-        context.data?.workspace?.current_dir,
-        context.data?.workspace?.project_dir
+        context.data?.workspace?.current_dir
     ];
 
     for (const candidate of candidates) {
