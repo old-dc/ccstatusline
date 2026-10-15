@@ -3,6 +3,7 @@ import chalk from 'chalk';
 
 import { runTUI } from './tui';
 import type {
+    SessionStats,
     SkillsMetrics,
     SpeedMetrics,
     TokenMetrics,
@@ -36,6 +37,7 @@ import {
 import { calculateContextPercentageMetrics } from './utils/context-percentage';
 import {
     getSessionDuration,
+    getSessionStats,
     getSpeedMetricsCollection,
     getTokenMetrics
 } from './utils/jsonl';
@@ -163,6 +165,12 @@ async function renderMultipleLines(data: StatusJSON) {
         tokenMetrics = await getTokenMetrics(data.transcript_path);
     }
 
+    const hasSessionStats = lines.some(line => line.some(item => item.type === 'session-turns' || item.type === 'cache-hit-rate'));
+    let sessionStats: SessionStats | null = null;
+    if (hasSessionStats && data.transcript_path) {
+        sessionStats = await getSessionStats(data.transcript_path);
+    }
+
     let sessionDuration: string | null = null;
     if (hasSessionClock && !hasSessionDurationInStatusJson(data) && data.transcript_path) {
         sessionDuration = await getSessionDuration(data.transcript_path);
@@ -235,6 +243,7 @@ async function renderMultipleLines(data: StatusJSON) {
     const context: RenderContext = {
         data,
         tokenMetrics,
+        sessionStats,
         speedMetrics,
         windowedSpeedMetrics,
         usageData,

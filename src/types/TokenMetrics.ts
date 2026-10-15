@@ -6,11 +6,17 @@ export interface TokenUsage {
 }
 
 export interface TranscriptLine {
-    message?: { usage?: TokenUsage; stop_reason?: string | null };
+    message?: { id?: string; usage?: TokenUsage; stop_reason?: string | null };
     isSidechain?: boolean;
     timestamp?: string;
     isApiErrorMessage?: boolean;
     type?: 'user' | 'assistant' | 'system' | 'progress' | 'file-history-snapshot';
+    origin?: { kind?: string };
+}
+
+export interface SessionStats {
+    turnCount: number;
+    cacheHitRate: number | null;
 }
 
 export interface TokenMetrics {

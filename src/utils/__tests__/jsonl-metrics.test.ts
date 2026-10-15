@@ -10,6 +10,7 @@ import {
 
 import {
     getSessionDuration,
+    getSessionStats,
     getSpeedMetrics,
     getSpeedMetricsCollection,
     getTokenMetrics
@@ -108,6 +109,33 @@ describe('jsonl transcript metrics', () => {
     it('returns null for missing transcript files', async () => {
         const duration = await getSessionDuration('/tmp/ccstatusline-jsonl-metrics-missing.jsonl');
         expect(duration).toBeNull();
+    });
+
+    it('counts human turns and computes a deduplicated cache hit rate', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccstatusline-jsonl-metrics-'));
+        tempRoots.push(root);
+        const transcriptPath = path.join(root, 'stats.jsonl');
+        const usage = (id: string, input: number, read: number, create: number) => JSON.stringify({
+            type: 'assistant',
+            message: { id, usage: { input_tokens: input, output_tokens: 5, cache_read_input_tokens: read, cache_creation_input_tokens: create } }
+        });
+        fs.writeFileSync(transcriptPath, [
+            JSON.stringify({ type: 'user', origin: { kind: 'human' }, message: { content: 'hi' } }),
+            JSON.stringify({ type: 'user', isMeta: true, message: { content: 'skill body' } }),
+            JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result' }] } }),
+            JSON.stringify({ type: 'user', origin: { kind: 'task-notification' }, message: { content: '<task-notification>' } }),
+            JSON.stringify({ type: 'user', isSidechain: true, origin: { kind: 'human' }, message: { content: 'sub' } }),
+            usage('msg_1', 10, 0, 90),
+            usage('msg_1', 10, 0, 90), // second content block of the same message
+            JSON.stringify({ type: 'user', origin: { kind: 'human' }, message: { content: 'again' } }),
+            usage('msg_2', 10, 290, 0)
+        ].join('\n'));
+
+        const stats = await getSessionStats(transcriptPath);
+
+        expect(stats.turnCount).toBe(2);
+        expect(stats.cacheHitRate).toBeCloseTo(72.5); // 290 / (100 + 300)
+        expect(await getSessionStats(path.join(root, 'missing.jsonl'))).toEqual({ turnCount: 0, cacheHitRate: null });
     });
 
     it('aggregates token totals and computes context length from the latest main-chain non-error entry', async () => {

@@ -7,6 +7,7 @@ export {
 export { getBlockMetrics } from './jsonl-blocks';
 export {
     getSessionDuration,
+    getSessionStats,
     getSpeedMetrics,
     getSpeedMetricsCollection,
     getTokenMetrics

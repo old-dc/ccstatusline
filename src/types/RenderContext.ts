@@ -9,7 +9,10 @@ import type { AgentActivityMetrics } from './AgentActivityMetrics';
 import type { SpeedMetrics } from './SpeedMetrics';
 import type { StatusJSON } from './StatusJSON';
 import type { TodoProgressMetrics } from './TodoProgressMetrics';
-import type { TokenMetrics } from './TokenMetrics';
+import type {
+    SessionStats,
+    TokenMetrics
+} from './TokenMetrics';
 
 export interface RenderUsageData {
     sessionUsage?: number;
@@ -32,6 +35,7 @@ export interface CompactionData { count: number }
 export interface RenderContext {
     data?: StatusJSON;
     tokenMetrics?: TokenMetrics | null;
+    sessionStats?: SessionStats | null;
     speedMetrics?: SpeedMetrics | null;
     windowedSpeedMetrics?: Record<string, SpeedMetrics> | null;
     usageData?: RenderUsageData | null;

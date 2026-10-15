@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import path from 'node:path';
 
 import type {
+    SessionStats,
     SpeedMetrics,
     TokenMetrics,
     TranscriptLine
@@ -228,6 +229,49 @@ export async function getTokenMetrics(transcriptPath: string): Promise<TokenMetr
     } catch {
         return { inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, contextLength: 0 };
     }
+}
+
+// Main-chain only. Turns = prompts the human typed (origin.kind === 'human'),
+// excluding tool results, task notifications, local commands and compact summaries.
+// Cache hit rate counts each API message once: Claude Code writes one entry per
+// content block, all carrying the same input-side usage.
+// ponytail: transcripts written before Claude Code added `origin` report 0 turns.
+export async function getSessionStats(transcriptPath: string): Promise<SessionStats> {
+    let turnCount = 0;
+    let cacheRead = 0;
+    let inputTotal = 0;
+
+    try {
+        const seenMessageIds = new Set<string>();
+        for (const line of await readJsonlLines(transcriptPath)) {
+            const data = parseJsonlLine(line) as TranscriptLine | null;
+            if (!data || data.isSidechain === true) {
+                continue;
+            }
+
+            if (data.type === 'user' && data.origin?.kind === 'human') {
+                turnCount++;
+                continue;
+            }
+
+            const usage = data.message?.usage;
+            const messageId = data.message?.id;
+            if (data.type !== 'assistant' || !usage || (messageId && seenMessageIds.has(messageId))) {
+                continue;
+            }
+            if (messageId) {
+                seenMessageIds.add(messageId);
+            }
+
+            const read = usage.cache_read_input_tokens ?? 0;
+            cacheRead += read;
+            inputTotal += (usage.input_tokens || 0) + read + (usage.cache_creation_input_tokens ?? 0);
+        }
+    } catch {
+        // Missing or unreadable transcript: fall through with zeros.
+    }
+
+    return { turnCount, cacheHitRate: inputTotal > 0 ? (cacheRead / inputTotal) * 100 : null };
 }
 
 function parseTimestamp(value: string | undefined): Date | null {
